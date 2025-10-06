@@ -105,6 +105,10 @@ exports.sendAutoNotification = (req, res) => {
         email: "screeningstarbackup@gmail.com"
       },
       {
+        name: "ScreeningStar Reports",
+        email: "reports@screeningstar.com"
+      },
+      {
         name: "Rohit Webstep",
         email: "rohitwebstep@gmail.com"
       }
