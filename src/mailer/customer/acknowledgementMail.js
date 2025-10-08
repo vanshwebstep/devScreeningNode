@@ -13,6 +13,15 @@ const generateTable = (applications, clientCode, is_head) => {
           // Inline styles for the branch name
           // table += `<tr><td colspan="5" style="font-weight: bold; background-color: #f5f5f5; color: #333; padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">${branch.name}</td></tr>`;
           for (const [index, application] of branch.applications.entries()) {
+            /*
+            table += `<tr>
+              <td>${index + 1}</td>
+              <td>${application.application_id}</td>
+              <td>${clientCode}</td>
+              <td>${application.name}</td>
+              <td>${application.serviceNames}</td>
+            </tr>`;
+            */
             table += `<tr>
               <td>${index + 1}</td>
               <td>${application.application_id}</td>
