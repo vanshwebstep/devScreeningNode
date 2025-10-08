@@ -25,7 +25,6 @@ const generateTable = (applications, clientCode, is_head) => {
             table += `<tr>
               <td>${index + 1}</td>
               <td>${application.application_id}</td>
-              <td>${clientCode}</td>
               <td>${application.name}</td>
               <td>${application.serviceNames}</td>
             </tr>`;
