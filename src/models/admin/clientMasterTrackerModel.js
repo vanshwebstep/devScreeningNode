@@ -184,18 +184,6 @@ async function getSummary(customerId, fromDate, toDate) {
             ${dateFilter('ca')}
         ) AS application_count,
 
-        -- Pending application count
-        (
-          SELECT COUNT(*)
-          FROM client_applications ca2
-          INNER JOIN cmt_applications cmt ON cmt.client_application_id = ca2.id
-            AND cmt.overall_status <> 'completed'
-          WHERE ca2.customer_id = c.id
-            AND ca2.is_deleted != 1
-            AND ca2.status NOT IN ('stopcheck','hold')
-            ${dateFilter('ca2')}
-        ) AS pending_application_count,
-
         -- QC Pending (completed but not verified)
         (
           SELECT COUNT(*)
@@ -224,10 +212,10 @@ async function getSummary(customerId, fromDate, toDate) {
         (
           SELECT COUNT(*)
           FROM client_applications ca5
-          INNER JOIN cmt_applications cmt ON cmt.client_application_id = ca5.id
-            AND cmt.overall_status = 'wip'
           WHERE ca5.customer_id = c.id
             AND ca5.is_deleted != 1
+            AND ca5.status <> 'completed'
+            AND ca5.status NOT IN ('stopcheck','hold')
             ${dateFilter('ca5')}
         ) AS wip_application_count,
 
@@ -409,18 +397,6 @@ const Customer = {
                                 ${dateFilter('ca')}
                             ) AS application_count,
 
-                            -- Pending application count
-                            (
-                              SELECT COUNT(*)
-                              FROM client_applications ca2
-                              INNER JOIN cmt_applications cmt ON cmt.client_application_id = ca2.id
-                                AND cmt.overall_status <> 'completed'
-                              WHERE ca2.customer_id = c.id
-                                AND ca2.is_deleted != 1
-                                AND ca2.status NOT IN ('stopcheck','hold')
-                                ${dateFilter('ca2')}
-                            ) AS pending_application_count,
-
                             -- QC Pending (completed but not verified)
                             (
                               SELECT COUNT(*)
@@ -449,10 +425,10 @@ const Customer = {
                             (
                               SELECT COUNT(*)
                               FROM client_applications ca5
-                              INNER JOIN cmt_applications cmt ON cmt.client_application_id = ca5.id
-                                AND cmt.overall_status = 'wip'
                               WHERE ca5.customer_id = c.id
                                 AND ca5.is_deleted != 1
+                                AND ca5.status <> 'completed'
+                                AND ca5.status NOT IN ('stopcheck','hold')
                                 ${dateFilter('ca5')}
                             ) AS wip_application_count,
 
@@ -1178,7 +1154,6 @@ const Customer = {
       // Initialize default filter options
       const filterOptions = {
         "application_count": 0,
-        "pending_application_count": 0,
         "qc_pending_count": 0,
         "completed_application_count": 0,
         "wip_application_count": 0,
@@ -1210,18 +1185,6 @@ const Customer = {
             ${dateFilter('ca')}
         ) AS application_count,
 
-        -- Pending application count
-        (
-          SELECT COUNT(*)
-          FROM client_applications ca2
-          INNER JOIN cmt_applications cmt ON cmt.client_application_id = ca2.id
-            AND cmt.overall_status <> 'completed'
-          WHERE ca2.customer_id = c.id
-            AND ca2.is_deleted != 1
-            AND ca2.status NOT IN ('stopcheck','hold')
-            ${dateFilter('ca2')}
-        ) AS pending_application_count,
-
         -- QC Pending (completed but not verified)
         (
           SELECT COUNT(*)
@@ -1250,10 +1213,10 @@ const Customer = {
         (
           SELECT COUNT(*)
           FROM client_applications ca5
-          INNER JOIN cmt_applications cmt ON cmt.client_application_id = ca5.id
-            AND cmt.overall_status = 'wip'
           WHERE ca5.customer_id = c.id
             AND ca5.is_deleted != 1
+            AND ca5.status <> 'completed'
+            AND ca5.status NOT IN ('stopcheck','hold')
             ${dateFilter('ca5')}
         ) AS wip_application_count,
 
@@ -1333,7 +1296,6 @@ const Customer = {
       // Initialize default filter options
       const filterOptions = {
         "application_count": 0,
-        "pending_application_count": 0,
         "qc_pending_count": 0,
         "completed_application_count": 0,
         "wip_application_count": 0,
@@ -1354,18 +1316,6 @@ const Customer = {
             AND ca.status NOT IN ('stopcheck','hold')
             AND ca.branch_id = ${branch_id}
         ) AS application_count,
-
-        -- Pending application count
-        (
-          SELECT COUNT(*)
-          FROM client_applications ca2
-          INNER JOIN cmt_applications cmt ON cmt.client_application_id = ca2.id
-            AND cmt.overall_status <> 'completed'
-          WHERE ca2.customer_id = c.id
-            AND ca2.is_deleted != 1
-            AND ca2.status NOT IN ('stopcheck','hold')
-            AND ca2.branch_id = ${branch_id}
-        ) AS pending_application_count,
 
         -- QC Pending (completed but not verified)
         (
@@ -1395,10 +1345,10 @@ const Customer = {
         (
           SELECT COUNT(*)
           FROM client_applications ca5
-          INNER JOIN cmt_applications cmt ON cmt.client_application_id = ca5.id
-            AND cmt.overall_status = 'wip'
           WHERE ca5.customer_id = c.id
             AND ca5.is_deleted != 1
+            AND ca5.status <> 'completed'
+            AND ca5.status NOT IN ('stopcheck','hold')
             AND ca5.branch_id = ${branch_id}
         ) AS wip_application_count,
 
@@ -1478,7 +1428,6 @@ const Customer = {
       // Initialize default filter options
       const filterOptions = {
         "application_count": 0,
-        "pending_application_count": 0,
         "qc_pending_count": 0,
         "completed_application_count": 0,
         "wip_application_count": 0,
@@ -1499,18 +1448,6 @@ const Customer = {
             AND ca.status NOT IN ('stopcheck','hold')
             AND ca.branch_id = ${branch_id}
         ) AS application_count,
-
-        -- Pending application count
-        (
-          SELECT COUNT(*)
-          FROM client_applications ca2
-          INNER JOIN cmt_applications cmt ON cmt.client_application_id = ca2.id
-            AND cmt.overall_status <> 'completed'
-          WHERE ca2.customer_id = c.id
-            AND ca2.is_deleted != 1
-            AND ca2.status NOT IN ('stopcheck','hold')
-            AND ca2.branch_id = ${branch_id}
-        ) AS pending_application_count,
 
         -- QC Pending (completed but not verified)
         (
@@ -1540,10 +1477,10 @@ const Customer = {
         (
           SELECT COUNT(*)
           FROM client_applications ca5
-          INNER JOIN cmt_applications cmt ON cmt.client_application_id = ca5.id
-            AND cmt.overall_status = 'wip'
           WHERE ca5.customer_id = c.id
             AND ca5.is_deleted != 1
+            AND ca5.status <> 'completed'
+            AND ca5.status NOT IN ('stopcheck','hold')
             AND ca5.branch_id = ${branch_id}
         ) AS wip_application_count,
 
