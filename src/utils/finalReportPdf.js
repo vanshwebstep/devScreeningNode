@@ -598,97 +598,121 @@ module.exports = {
                                                     // Draw text on top
 
                                                     const barY = nameY + 10;
-                                                    const companyFontSize = 15;
+                                                    // === Company Name Rendering (centered in right bar)
+                                                    const companyFontSize = 14;
+                                                    doc.setFontSize(companyFontSize);
+                                                    doc.setTextColor(255);
+                                                    doc.setFont("TimesNewRoman", "bold");
+
+                                                    // Split text to fit inside the right bar width
+
+
+                                                    // Draw text centered
+
                                                     doc.setFontSize(companyFontSize);
 
-                                                    const totalAvailable = pageWidth - 20;
+                                                    // ---------------------------
+                                                    // Layout & sizing (constants)
+                                                    // ---------------------------
+                                                    const margin = 10;
+                                                    const totalAvailable = pageWidth - 20; // pageWidth minus left & right page margins
                                                     const profileImageWidth = 45;
                                                     const imageX = 35;
 
-                                                    // === Measure text widths
-                                                    const companyTextWidth = doc.getTextWidth(companyName) + 40; // padding
-                                                    const rightBarMinWidth = Math.max(totalAvailable / 2);
+                                                    // === decide bar widths
+                                                    const rightBarMinWidth = Math.max(totalAvailable / 2); // your logic; this yields half
                                                     const leftBarWidth = totalAvailable - rightBarMinWidth;
                                                     const rightBarWidth = totalAvailable - leftBarWidth;
-                                                    const wrappedText = doc.splitTextToSize(companyName, rightBarWidth);
-                                                    const companyLineHeight = companyFontSize * 0.3528; // in mm (approx conversion from pt to mm)
-                                                    const companyTextHeight = wrappedText.length * companyLineHeight;
-                                                    const paddingY = 9;
-                                                    const companyBarHeight = companyTextHeight + paddingY;
-                                                    doc.setFillColor(...cyan);
-                                                    doc.rect(10, barY, leftBarWidth, companyBarHeight, "F");
 
-                                                    // === Draw Right Bar (next to left bar)
+                                                    // vertical positions
+                                                    const paddingY = 9;      // vertical padding inside bars
+                                                    const barX = margin;     // left-most X for bars
+                                                    // barY is assumed provided above in your code
+
+                                                    // ---------------------------
+                                                    // Company name wrapping + height
+                                                    // ---------------------------
+                                                    doc.setFontSize(companyFontSize);
+                                                    doc.setFont("TimesNewRoman", "bold");
+
+                                                    // Wrap the company name into the right bar width (leave horizontal padding)
+                                                    const horizontalPadding = 10;
+                                                    const wrappedRight = doc.splitTextToSize(companyName, rightBarWidth - horizontalPadding * 2);
+
+                                                    // Convert font size (pt) to approximate mm line height (your previous factor)
+                                                    const companyLineHeight = companyFontSize * 0.3528;
+                                                    const companyTextHeight = wrappedRight.length * companyLineHeight;
+
+                                                    // Height of the combined bar area used for vertical centering
+                                                    const companyBarHeight = companyTextHeight + paddingY * 2 - 4;
+
+                                                    // ---------------------------
+                                                    // Draw bars (left + right) and border
+                                                    // ---------------------------
+                                                    doc.setFillColor(...cyan);
+                                                    doc.rect(barX, barY, leftBarWidth, companyBarHeight, "F");
+
                                                     doc.setFillColor(161, 194, 250);
-                                                    // 156, 210, 169 Green COLor Light 
-                                                    // 156, 210, 169
-                                                    doc.rect(10 + leftBarWidth, barY, rightBarWidth, companyBarHeight, "F");
-                                                    const borderColorr = [67, 133, 246]; // RGB for border
-                                                    const borderThickness = 1.5; // adjust as needed
+                                                    doc.rect(barX + leftBarWidth, barY, rightBarWidth, companyBarHeight, "F");
+
+                                                    const borderColorr = [67, 133, 246];
+                                                    const borderThickness = 1.5;
                                                     doc.setLineWidth(borderThickness);
                                                     doc.setDrawColor(...borderColorr);
 
-                                                    const x = 10;
-                                                    const y = profileY + 13;
-                                                    const w = leftBarWidth - 2;
-                                                    const h = 39;
-                                                    const len = 8; // corner line length
-
-                                                    // Top-left corner
-                                                    // doc.line(x, y, x + len, y);        // top
-                                                    // doc.line(x, y, x, y + len + 30);        // left
-
-                                                    // // Top-right corner
-                                                    // doc.line(x + w, y, x + w - len, y); // top
-                                                    // doc.line(x + w, y, x + w, y + len +30); // right
-
-                                                    // // Bottom-left corner
-                                                    // doc.line(x, y + h, x + len, y + h);  // bottom
-                                                    // doc.line(x, y + h, x, y + h - len );  // left
-
-                                                    // // Bottom-right corner
-                                                    // doc.line(x + w, y + h, x + w - len, y + h);  // bottom
-                                                    // doc.line(x + w, y + h, x + w, y + h - len );  // right
+                                                    // ---------------------------
+                                                    // Images (status + profile)
+                                                    // ---------------------------
                                                     const statusImages = {
-                                                        GREEN: greenTarget,  // ✅ Replace with your own image URLs or base64
+                                                        GREEN: greenTarget,
                                                         RED: redTarget,
                                                         YELLOW: yellowTarget,
                                                         ORANGE: orangeTarget,
                                                     };
 
-                                                    // Get the correct image based on status
-                                                    const status = applicationInfo.final_verification_status.toUpperCase();
+                                                    const status = (applicationInfo.final_verification_status || "").toUpperCase();
                                                     const statusImage = statusImages[status];
                                                     if (statusImage) {
-                                                        // Note: If you're using an external URL, convert it to Base64 or use a data URI
-                                                        // Here we use 'addImage' assuming image is Base64 or from same-origin
-                                                        doc.addImage(statusImage, "PNG", 30 + leftBarWidth, profileY + 13, 67, 40);
+                                                        // place status image inside right bar near top (adjust coordinates to taste)
+                                                        doc.addImage(statusImage, "PNG", barX + leftBarWidth + 20, profileY + 13, 67, 40);
                                                     } else {
-                                                        doc.text("No status image available", 10, 40);
+                                                        doc.text("No status image available", barX + leftBarWidth + 10, barY + 12);
                                                     }
-                                                    const roundedImage = await getRoundedImage(profilePhoto, 100);
-                                                    doc.addImage(
-                                                        roundedImage,
-                                                        "PNG",
-                                                        imageX,
-                                                        profileY + 15,
-                                                        40,
-                                                        40
-                                                    );
 
-                                                    // === Company Name Text (centered in right bar)
+                                                    const roundedImage = await getRoundedImage(profilePhoto, 100);
+                                                    doc.addImage(roundedImage, "PNG", imageX, profileY + 15, 40, 40);
+
+                                                    // ---------------------------
+                                                    // Compute center positions
+                                                    // ---------------------------
+                                                    // center X of right bar (absolute page coordinates)
+                                                    const rightBarCenterX = barX + leftBarWidth + (rightBarWidth / 2);
+
+                                                    // center X of left bar (if you need to center text in left bar)
+                                                    const leftBarCenterX = barX + leftBarWidth / 2;
+
+                                                    // Compute vertical center Y for text inside the bar
+                                                    // We want the vertical center of the text block to sit in the center of the bar.
+                                                    const companyTextY = barY + 1 + (companyBarHeight / 2) - (companyTextHeight / 2) + companyLineHeight / 2;
+                                                    // note: for jsPDF, y is baseline for a line — we added half a line to better align
+
+                                                    // ---------------------------
+                                                    // Draw company name centered in the RIGHT bar
+                                                    // ---------------------------
                                                     doc.setFontSize(companyFontSize);
                                                     doc.setTextColor(255);
-                                                    doc.setFont("TimesNewRoman", "bold");
-                                                    doc.text(lines, leftBarWidth / 2 - 5, barY + 9, { align: "left" });
 
-                                                    doc.text(
-                                                        wrappedText,
-                                                        leftBarWidth + rightBarWidth / 2 - 5,
-                                                        barY + 9,
-                                                        { align: "left" }
-                                                    );
+                                                    // Use the wrappedRight content and draw it centered at rightBarCenterX
+                                                    // doc.text can take an array (multiline) and an options object { align: "center" }
+                                                    doc.text(wrappedRight, rightBarCenterX, companyTextY, { align: "center" });
 
+                                                    // ---------------------------
+                                                    // Example: if you also want a centered label inside LEFT bar (optional)
+                                                    // ---------------------------
+                                                    const wrappedLeft = doc.splitTextToSize(lines, leftBarWidth - horizontalPadding * 2);
+                                                    const leftTextHeight = wrappedLeft.length * companyLineHeight;
+                                                    const leftTextY = barY + 1 + (companyBarHeight / 2) - (leftTextHeight / 2) + companyLineHeight / 2;
+                                                    doc.text(wrappedLeft, leftBarCenterX, leftTextY, { align: "center" });
 
                                                     doc.setLineWidth(0.5);
                                                     doc.autoTable({
@@ -1172,7 +1196,7 @@ module.exports = {
                                                         }
                                                         return label;
                                                     }
-
+                                                    
                                                     for (const service of servicesData) {
                                                         let yPosition = 10; // Reset yPosition to the top margin
 
@@ -1240,6 +1264,10 @@ module.exports = {
                                                                         // fallback: if rawValue is undefined but verified is present, use verified as value
 
                                                                         const finalValue = rawValue !== undefined ? rawValue : verified;
+
+                                                                        if (name == 'additional_fee_police_verification_pa') {
+
+                                                                        }
 
                                                                         const formatDate = (dateStr) => {
                                                                             const date = new Date(dateStr);
@@ -1794,10 +1822,8 @@ module.exports = {
 
                                                     yPosition += 8;
                                                     doc.text("For queries or customizations, please contact:", startXNew, yPosition);
-
                                                     // Example: disclaimer_emails = ["email1@example.com", "email2@example.com"]
                                                     let disclaimer_emails = [];
-
                                                     function validateEmail(email) {
                                                         const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                                                         return re.test(email);
