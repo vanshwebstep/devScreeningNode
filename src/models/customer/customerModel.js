@@ -450,86 +450,165 @@ const Customer = {
   },
 
   list: async (callback) => {
-    const sql = `
-    SELECT 
-         c.*, 
-         c.id AS main_id, 
-         cm.*, 
-         cm.id AS meta_id, 
-         COALESCE(b.branch_count, 0) AS branch_count
-     FROM customers c
-     LEFT JOIN customer_metas cm ON c.id = cm.customer_id
-     LEFT JOIN (
-         SELECT customer_id, COUNT(*) AS branch_count 
-         FROM branches 
-         GROUP BY customer_id
-     ) b ON c.id = b.customer_id
-     WHERE c.status != '0' AND c.is_deleted != 1
-     ORDER BY c.created_at DESC;
-`;
-    const results = await sequelize.query(sql, {
-      type: QueryTypes.SELECT,
-    });
+    try {
+      const sql = `
+      SELECT 
+        customers.*, 
+        customers.id AS main_id, 
+        customer_metas.*, 
+        customer_metas.id AS meta_id,
+        COALESCE(branch_counts.branch_count, 0) AS branch_count
+      FROM 
+        customers
+      LEFT JOIN 
+        customer_metas 
+      ON 
+        customers.id = customer_metas.customer_id
+      LEFT JOIN 
+        (
+          SELECT 
+            customer_id, 
+            COUNT(*) AS branch_count
+          FROM 
+            branches
+          GROUP BY 
+            customer_id
+        ) AS branch_counts
+      ON 
+        customers.id = branch_counts.customer_id
+      WHERE 
+        customers.status != '0' AND customers.is_deleted != 1
+      ORDER BY 
+        customers.created_at DESC;
+    `;
 
-    const updatedCustomers = [];
+      const results = await sequelize.query(sql, { type: QueryTypes.SELECT });
 
-    const updateAllServiceTitles = async () => {
-      for (const customerData of results) {
-
-        let servicesData;
+      // Process service titles asynchronously
+      const updateServiceTitles = async (customerData) => {
         try {
-          servicesData = JSON.parse(customerData?.services);
-        } catch (parseError) {
-          console.error(
-            "Error parsing services data for customer ID:",
-            customerData.main_id,
-            parseError
-          );
-          return callback(parseError, null);
-        }
+          let servicesData = [];
 
-        try {
-          for (const group of servicesData) {
-            if (Array.isArray(group.services)) {
-              // Ensure 'group.services' is an array
-              for (const service of group.services) {
-                const serviceSql = `SELECT title FROM services WHERE id = ?`;
-                const [rows] = await new Promise(async (resolve, reject) => {
-                  const results = await sequelize.query(serviceSql, {
-                    replacements: [service.serviceId], // Positional replacements using ?
-                    type: QueryTypes.SELECT,
-                  });
-                  resolve(results);
-                });
-
-                if (rows && rows.length > 0 && rows[0].title) {
-                  service.serviceTitle = rows[0].title;
-                }
-              }
-            } else {
-              console.warn(
-                "group.services is not an array:",
-                group.services
-              );
+          if (customerData.services) {
+            try {
+              servicesData = JSON.parse(customerData.services);
+            } catch (err) {
+              console.error("Invalid services JSON", err);
+              return;
             }
           }
+
+          // Collect all serviceIds & packageIds
+          const serviceIds = [];
+          const packageIds = [];
+
+          servicesData.forEach(group => {
+            if (Array.isArray(group.services)) {
+              group.services.forEach(service => {
+                if (service.serviceId) {
+                  serviceIds.push(service.serviceId);
+                }
+
+                if (service.packages && typeof service.packages === "object") {
+                  Object.keys(service.packages).forEach(pkgId => {
+                    if (!isNaN(pkgId)) packageIds.push(Number(pkgId));
+                  });
+                }
+              });
+            }
+          });
+
+          const uniqueServiceIds = [...new Set(serviceIds)];
+          const uniquePackageIds = [...new Set(packageIds)];
+
+          // Fetch services
+          const serviceMap = {};
+          if (uniqueServiceIds.length) {
+            const serviceRows = await sequelize.query(
+              `SELECT id, title FROM services WHERE id IN (:ids)`,
+              {
+                type: QueryTypes.SELECT,
+                replacements: { ids: uniqueServiceIds }
+              }
+            );
+
+            serviceRows.forEach(row => {
+              serviceMap[row.id] = row.title;
+            });
+          }
+
+          // Fetch packages
+          const packageMap = {};
+          if (uniquePackageIds.length) {
+            const pkgRows = await sequelize.query(
+              `SELECT id, title FROM packages WHERE id IN (:ids)`,
+              {
+                type: QueryTypes.SELECT,
+                replacements: { ids: uniquePackageIds }
+              }
+            );
+
+            pkgRows.forEach(row => {
+              packageMap[row.id] = row.title;
+            });
+          }
+
+          // Update structure
+          servicesData = servicesData
+            .map(group => {
+              if (!Array.isArray(group.services)) return null;
+
+              group.services = group.services
+                .map(service => {
+                  const title = serviceMap[service.serviceId];
+
+                  if (!title) {
+                    console.log(`⚠️ Service ID ${service.serviceId} not found — removing`);
+                    return null;
+                  }
+
+                  service.serviceTitle = title;
+
+                  // Update packages
+                  const updatedPackages = {};
+                  if (service.packages && typeof service.packages === "object") {
+                    Object.keys(service.packages).forEach(pkgId => {
+                      const pkgTitle = packageMap[Number(pkgId)];
+                      if (pkgTitle) {
+                        updatedPackages[pkgId] = pkgTitle;
+                      }
+                    });
+                  }
+
+                  service.packages = updatedPackages;
+                  return service;
+                })
+                .filter(Boolean);
+
+              // Remove group if no services left
+              return group.services.length ? group : null;
+            })
+            .filter(Boolean);
+
+          customerData.services = JSON.stringify(servicesData);
         } catch (err) {
           console.error(
-            "Error updating service titles for customer ID:",
+            "Error processing services for customer ID:",
             customerData.main_id,
             err
           );
-          return callback(err, null);
         }
+      };
 
-        customerData.services = JSON.stringify(servicesData);
-        // Add the updated customer data to the array
-        updatedCustomers.push(customerData);
-      }
-      callback(null, updatedCustomers);
-    };
-    updateAllServiceTitles();
 
+      // Execute service title updates for all customers in parallel
+      await Promise.all(results.map(updateServiceTitles));
+
+      callback(null, results);
+    } catch (err) {
+      console.error("Database query error:", err);
+      callback(err, null);
+    }
   },
 
   listWithBasicInfo: async (callback) => {
@@ -744,38 +823,107 @@ const Customer = {
       const customerData = results[0];
       customerData.client_spoc_details = null;
 
-      let servicesData;
-      try {
-        servicesData = JSON.parse(customerData.services);
-      } catch (parseError) {
-        return callback(parseError, null);
-      }
-
+      /**
+       * Update service & package titles
+       */
       const updateServiceTitles = async () => {
+        let servicesData = [];
+
+        if (!customerData.services) return;
+
         try {
-          for (const group of servicesData) {
-            for (const service of group.services) {
-              const serviceSql = `SELECT title FROM services WHERE id = ?`;
-
-              const [rows] = await sequelize.query(serviceSql, {
-                replacements: [service.serviceId], // Positional replacements using ?
-                type: QueryTypes.SELECT,
-              });
-
-              if (rows && rows.title) {
-                service.serviceTitle = rows.title;
-              }
-            }
-          }
+          servicesData = JSON.parse(customerData.services);
         } catch (err) {
-          console.error("Error updating service titles:", err);
-        } finally {
-          customerData.services = JSON.stringify(servicesData);
-          callback(null, customerData);
+          throw new Error("Invalid services JSON");
         }
+
+        const serviceIds = [];
+        const packageIds = [];
+
+        // Collect IDs
+        servicesData.forEach(group => {
+          if (!Array.isArray(group.services)) return;
+
+          group.services.forEach(service => {
+            if (service.serviceId) {
+              serviceIds.push(service.serviceId);
+            }
+
+            if (service.packages && typeof service.packages === "object") {
+              Object.keys(service.packages).forEach(pkgId => {
+                if (!isNaN(pkgId)) packageIds.push(Number(pkgId));
+              });
+            }
+          });
+        });
+
+        const uniqueServiceIds = [...new Set(serviceIds)];
+        const uniquePackageIds = [...new Set(packageIds)];
+
+        // Fetch service titles
+        const serviceMap = {};
+        if (uniqueServiceIds.length) {
+          const rows = await sequelize.query(
+            `SELECT id, title FROM services WHERE id IN (:ids)`,
+            {
+              type: QueryTypes.SELECT,
+              replacements: { ids: uniqueServiceIds }
+            }
+          );
+
+          rows.forEach(r => (serviceMap[r.id] = r.title));
+        }
+
+        // Fetch package titles
+        const packageMap = {};
+        if (uniquePackageIds.length) {
+          const rows = await sequelize.query(
+            `SELECT id, title FROM packages WHERE id IN (:ids)`,
+            {
+              type: QueryTypes.SELECT,
+              replacements: { ids: uniquePackageIds }
+            }
+          );
+
+          rows.forEach(r => (packageMap[r.id] = r.title));
+        }
+
+        // Update structure
+        servicesData = servicesData
+          .map(group => {
+            if (!Array.isArray(group.services)) return null;
+
+            group.services = group.services
+              .map(service => {
+                const title = serviceMap[service.serviceId];
+
+                if (!title) return null;
+
+                service.serviceTitle = title;
+
+                const updatedPackages = {};
+                if (service.packages && typeof service.packages === "object") {
+                  Object.keys(service.packages).forEach(pkgId => {
+                    const pkgTitle = packageMap[Number(pkgId)];
+                    if (pkgTitle) updatedPackages[pkgId] = pkgTitle;
+                  });
+                }
+
+                service.packages = updatedPackages;
+                return service;
+              })
+              .filter(Boolean);
+
+            return group.services.length ? group : null;
+          })
+          .filter(Boolean);
+
+        customerData.services = JSON.stringify(servicesData);
       };
 
       await updateServiceTitles();
+
+      callback(null, customerData);
     } catch (err) {
       console.error("Error:", err);
       callback(err, null);

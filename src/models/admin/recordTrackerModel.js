@@ -7,265 +7,247 @@ const hashPassword = (password) =>
   crypto.createHash("md5").update(password).digest("hex");
 
 const recordTrackerModel = {
-  recordTracker: async (customerId, from_month,
+  recordTracker: async (
+    customerId,
+    from_month,
     to_month,
     from_year,
-    to_year, callback) => {
-    // Start connection to the database
-
-    // Select only necessary customer details
-    const customerQuery = `
-       SELECT 
-        c.id, 
-        c.client_unique_id, 
-        c.name, 
-        c.emails, 
-        c.mobile, 
-        c.services, 
-        cm.address, 
-        cm.contact_person_name, 
-        cm.escalation_point_contact, 
-        cm.single_point_of_contact, 
+    to_year,
+    callback
+  ) => {
+    try {
+      /* -------------------- CUSTOMER -------------------- */
+      const customerQuery = `
+      SELECT 
+        c.id,
+        c.client_unique_id,
+        c.name,
+        c.emails,
+        c.mobile,
+        c.services,
+        cm.address,
+        cm.contact_person_name,
+        cm.escalation_point_contact,
+        cm.single_point_of_contact,
         cm.gst_number,
         cm.payment_contact_person,
         cm.state,
         cm.state_code
       FROM customers c
       LEFT JOIN customer_metas cm ON cm.customer_id = c.id
-      WHERE c.id = ? AND c.is_deleted != 1;
+      WHERE c.id = ? AND c.is_deleted != 1
     `;
-    const customerResults = await sequelize.query(customerQuery, {
-      replacements: [customerId], // Positional replacements using ?
-      type: QueryTypes.SELECT,
-    });
 
-    if (customerResults.length === 0) {
-      return callback(new Error("Customer not found."), null);
-    }
+      const customerResults = await sequelize.query(customerQuery, {
+        replacements: [customerId],
+        type: QueryTypes.SELECT
+      });
 
-    const customerData = customerResults[0];
-
-    let servicesData;
-    try {
-      servicesData = JSON.parse(customerData.services);
-    } catch (parseError) {
-
-      return callback(parseError, null);
-    }
-
-    const updateServiceTitles = async () => {
-      try {
-        for (const group of servicesData) {
-          for (const service of group.services) {
-            const serviceSql = `SELECT title FROM services WHERE id = ?`;
-
-            const [rows] = await new Promise(async (resolve) => {
-              const results = await sequelize.query(serviceSql, {
-                replacements: [service.serviceId], // Positional replacements using ?
-                type: QueryTypes.SELECT,
-              });
-              resolve(results);
-            });
-            if (rows && rows.title) {
-              service.serviceTitle = rows.title;
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Error updating service titles:", err);
-      } finally {
-
-        customerData.services = JSON.stringify(servicesData);
-        const applicationQuery = `
-            SELECT
-              ca.id,
-              ca.branch_id,
-              ca.application_id,
-              ca.employee_id,
-              ca.name,
-              ca.services,
-              ca.status,
-              ca.created_at,
-              ca.check_id,
-              ca.ticket_id,
-              ca.sub_client,
-              cmt.report_date
-            FROM 
-              client_applications ca
-            LEFT JOIN 
-              cmt_applications cmt ON cmt.client_application_id = ca.id
-            WHERE 
-              ca.status IN ('completed', 'closed', 'complete') 
-              AND ca.customer_id = ?
-              AND MONTH(cmt.report_date) BETWEEN ? AND ?
-              AND YEAR(cmt.report_date) BETWEEN ? AND ?
-              AND ca.is_deleted != 1
-            ORDER BY ca.branch_id;
-          `;
-        const applicationResults = await sequelize.query(applicationQuery, {
-          replacements: [customerId, from_month, to_month, from_year, to_year], // Positional replacements using ?
-          type: QueryTypes.SELECT,
-        });
-
-        const branchApplicationsMap = {};
-
-        applicationResults.forEach((application) => {
-          const branchId = application.branch_id;
-          if (!branchApplicationsMap[branchId]) {
-            branchApplicationsMap[branchId] = {
-              id: branchId,
-              applications: [],
-            };
-          }
-
-          // Initialize statusDetails if not already initialized
-          application.statusDetails = application.statusDetails || [];
-
-          // Push the application into the corresponding branch's array
-          branchApplicationsMap[branchId].applications.push(
-            application
-          );
-        });
-
-        // Prepare to fetch branch details for each unique branch ID
-        const branchesWithApplications = [];
-        const branchIds = Object.keys(branchApplicationsMap);
-        const branchPromises = branchIds.map((branchId) => {
-          return new Promise(async (resolve) => {
-            const branchQuery = `
-                  SELECT id, name 
-                  FROM branches 
-                  WHERE id = ?;
-                `;
-            const branchResults = await sequelize.query(branchQuery, {
-              replacements: [branchId], // Positional replacements using ?
-              type: QueryTypes.SELECT,
-            });
-
-            if (branchResults.length > 0) {
-              const branch = branchResults[0];
-              branchesWithApplications.push({
-                id: branch.id,
-                name: branch.name,
-                applications:
-                  branchApplicationsMap[branchId].applications,
-              });
-            }
-            resolve();
-
-          });
-        });
-
-        // Process each application's services and fetch status from the appropriate table
-        const applicationServicePromises = applicationResults.map(
-          (application) => {
-            const services = application.services.split(",");
-            const servicePromises = services.map((serviceId) => {
-              return new Promise(async (resolve, reject) => {
-                const reportFormQuery = `
-                        SELECT json
-                        FROM report_forms
-                        WHERE service_id = ?;
-                      `;
-                const reportFormResults = await sequelize.query(reportFormQuery, {
-                  replacements: [serviceId], // Positional replacements using ?
-                  type: QueryTypes.SELECT,
-                });
-
-                if (reportFormResults.length > 0) {
-                  // Parse JSON to extract db_table
-                  const reportFormJson = JSON.parse(
-                    reportFormResults[0].json
-                  );
-                  const dbTable = reportFormJson.db_table;
-
-                  // Query to find the column that starts with "additional_fee"
-                  const additionalFeeColumnQuery = `SHOW COLUMNS FROM \`${dbTable}\` WHERE \`Field\` LIKE 'additional_fee%'`;
-                  const columnResults = await sequelize.query(additionalFeeColumnQuery, {
-                    type: QueryTypes.SELECT,
-                  });
-                  // Identify the additional_fee column
-                  const additionalFeeColumn =
-                    columnResults.length > 0
-                      ? columnResults[0].Field
-                      : null;
-
-                  // Construct the query with a fixed "status" column and dynamic "additional_fee" column
-                  const statusQuery = `
-                                SELECT status${additionalFeeColumn
-                      ? `, ${additionalFeeColumn}`
-                      : ""
-                    }
-                                FROM ${dbTable}
-                                WHERE client_application_id = ?;
-                              `;
-                  const statusResults = await sequelize.query(statusQuery, {
-                    replacements: [application.id], // Positional replacements using ?
-                    type: QueryTypes.SELECT,
-                  });
-
-                  console.warn(
-                    `SELECT status${additionalFeeColumn
-                      ? `, ${additionalFeeColumn}`
-                      : ""
-                    } FROM ${dbTable} WHERE client_application_id = ${application.id
-                    };`
-                  );
-
-
-                  // Append the status and additional_fee to the application object
-                  application.statusDetails.push({
-                    serviceId,
-                    status:
-                      statusResults.length > 0
-                        ? statusResults[0].status
-                        : null,
-                    additionalFee:
-                      additionalFeeColumn &&
-                        statusResults.length > 0
-                        ? statusResults[0][
-                        additionalFeeColumn
-                        ]
-                        : null,
-                  });
-
-                  resolve();
-
-                } else {
-                  resolve();
-                }
-
-              });
-            });
-
-            return Promise.all(servicePromises);
-          }
-        );
-
-        Promise.all(applicationServicePromises)
-          .then(() => Promise.all(branchPromises))
-          .then(() => {
-            // Compile the final results
-            const finalResults = {
-              customerInfo: customerData,
-              applicationsByBranch: branchesWithApplications,
-            };
-
-            callback(null, finalResults);
-          })
-          .catch((err) => {
-
-            console.error(
-              "Error while fetching branch or service details:",
-              err
-            );
-            callback(err, null);
-          });
-
+      if (!customerResults.length) {
+        return callback(new Error("Customer not found"), null);
       }
-    };
 
-    updateServiceTitles();
+      const customerData = customerResults[0];
+
+      /* -------------------- UPDATE SERVICES -------------------- */
+      let servicesData = [];
+
+      if (customerData.services) {
+        servicesData = JSON.parse(customerData.services);
+      }
+
+      const serviceIds = [];
+      const packageIds = [];
+
+      servicesData.forEach(group => {
+        if (!Array.isArray(group.services)) return;
+
+        group.services.forEach(service => {
+          if (service.serviceId) serviceIds.push(service.serviceId);
+
+          if (service.packages && typeof service.packages === "object") {
+            Object.keys(service.packages).forEach(id => {
+              if (!isNaN(id)) packageIds.push(Number(id));
+            });
+          }
+        });
+      });
+
+      const [serviceRows, packageRows] = await Promise.all([
+        serviceIds.length
+          ? sequelize.query(
+            `SELECT id, title FROM services WHERE id IN (:ids)`,
+            {
+              replacements: { ids: [...new Set(serviceIds)] },
+              type: QueryTypes.SELECT
+            }
+          )
+          : [],
+        packageIds.length
+          ? sequelize.query(
+            `SELECT id, title FROM packages WHERE id IN (:ids)`,
+            {
+              replacements: { ids: [...new Set(packageIds)] },
+              type: QueryTypes.SELECT
+            }
+          )
+          : []
+      ]);
+
+      const serviceMap = {};
+      serviceRows.forEach(r => (serviceMap[r.id] = r.title));
+
+      const packageMap = {};
+      packageRows.forEach(r => (packageMap[r.id] = r.title));
+
+      servicesData = servicesData
+        .map(group => {
+          if (!Array.isArray(group.services)) return null;
+
+          group.services = group.services
+            .map(service => {
+              if (!serviceMap[service.serviceId]) return null;
+
+              service.serviceTitle = serviceMap[service.serviceId];
+
+              const updatedPackages = {};
+              if (service.packages) {
+                Object.keys(service.packages).forEach(id => {
+                  if (packageMap[id]) updatedPackages[id] = packageMap[id];
+                });
+              }
+
+              service.packages = updatedPackages;
+              return service;
+            })
+            .filter(Boolean);
+
+          return group.services.length ? group : null;
+        })
+        .filter(Boolean);
+
+      customerData.services = JSON.stringify(servicesData);
+
+      /* -------------------- APPLICATIONS -------------------- */
+      const applicationResults = await sequelize.query(
+        `
+      SELECT
+        ca.id,
+        ca.branch_id,
+        ca.application_id,
+        ca.employee_id,
+        ca.name,
+        ca.services,
+        ca.status,
+        ca.created_at,
+        ca.check_id,
+        ca.ticket_id,
+        ca.sub_client,
+        cmt.report_date
+      FROM client_applications ca
+      LEFT JOIN cmt_applications cmt
+        ON cmt.client_application_id = ca.id
+      WHERE ca.customer_id = ?
+        AND ca.status IN ('completed','closed','complete')
+        AND ca.is_deleted != 1
+        AND MONTH(cmt.report_date) BETWEEN ? AND ?
+        AND YEAR(cmt.report_date) BETWEEN ? AND ?
+      ORDER BY ca.branch_id
+      `,
+        {
+          replacements: [customerId, from_month, to_month, from_year, to_year],
+          type: QueryTypes.SELECT
+        }
+      );
+
+      /* -------------------- GROUP BY BRANCH -------------------- */
+      const branchMap = {};
+
+      applicationResults.forEach(app => {
+        app.statusDetails = [];
+
+        if (!branchMap[app.branch_id]) {
+          branchMap[app.branch_id] = {
+            id: app.branch_id,
+            applications: []
+          };
+        }
+        branchMap[app.branch_id].applications.push(app);
+      });
+
+      const branchIds = Object.keys(branchMap);
+
+      const branchRows = branchIds.length
+        ? await sequelize.query(
+          `SELECT id, name FROM branches WHERE id IN (:ids)`,
+          {
+            replacements: { ids: branchIds },
+            type: QueryTypes.SELECT
+          }
+        )
+        : [];
+
+      const branchesWithApplications = branchRows.map(b => ({
+        id: b.id,
+        name: b.name,
+        applications: branchMap[b.id]?.applications || []
+      }));
+
+      /* -------------------- STATUS DETAILS -------------------- */
+      for (const app of applicationResults) {
+        if (!app.services) continue;
+
+        const serviceList = app.services.split(",");
+
+        for (const serviceId of serviceList) {
+          const forms = await sequelize.query(
+            `SELECT json FROM report_forms WHERE service_id = ?`,
+            {
+              replacements: [serviceId],
+              type: QueryTypes.SELECT
+            }
+          );
+
+          if (!forms.length) continue;
+
+          const { db_table } = JSON.parse(forms[0].json);
+
+          const cols = await sequelize.query(
+            `SHOW COLUMNS FROM \`${db_table}\` WHERE Field LIKE 'additional_fee%'`,
+            { type: QueryTypes.SELECT }
+          );
+
+          const feeColumn = cols[0]?.Field;
+
+          const statusRows = await sequelize.query(
+            `
+          SELECT status${feeColumn ? `, ${feeColumn}` : ""}
+          FROM ${db_table}
+          WHERE client_application_id = ?
+          `,
+            {
+              replacements: [app.id],
+              type: QueryTypes.SELECT
+            }
+          );
+
+          app.statusDetails.push({
+            serviceId,
+            status: statusRows[0]?.status || null,
+            additionalFee: feeColumn ? statusRows[0]?.[feeColumn] || null : null
+          });
+        }
+      }
+
+      /* -------------------- FINAL RESPONSE -------------------- */
+      callback(null, {
+        customerInfo: customerData,
+        applicationsByBranch: branchesWithApplications
+      });
+    } catch (err) {
+      console.error("recordTracker error:", err);
+      callback(err, null);
+    }
   },
 
   list: async (from_month, from_year, to_month, to_year, callback) => {
