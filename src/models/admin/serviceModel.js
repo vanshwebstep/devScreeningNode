@@ -444,18 +444,41 @@ const Service = {
   },
 
   delete: async (id, callback) => {
-    const sql = `
-      DELETE FROM \`services\`
-      WHERE \`id\` = ?
-    `;
+    try {
+      /* ---------- STEP 1: DELETE SERVICE ---------- */
+      const serviceResult = await sequelize.query(
+        `
+      DELETE FROM services
+      WHERE id = ?
+      `,
+        {
+          replacements: [id],
+          type: QueryTypes.DELETE,
+        }
+      );
 
+      /* ---------- STEP 2: DELETE REPORT FORM ---------- */
+      const reportFormResult = await sequelize.query(
+        `
+      DELETE FROM report_forms
+      WHERE service_id = ?
+      `,
+        {
+          replacements: [id],
+          type: QueryTypes.DELETE,
+        }
+      );
 
-    const results = await sequelize.query(sql, {
-      replacements: [id], // Positional replacements using ?
-      type: QueryTypes.DELETE,
-    });
-    callback(null, results);
+      return callback(null, {
+        message: "Service and related report form deleted successfully",
+        serviceResult,
+        reportFormResult
+      });
 
+    } catch (err) {
+      console.error("Delete error:", err);
+      callback(err, null);
+    }
   },
 
   servicesWithGroup: async (callback) => {
