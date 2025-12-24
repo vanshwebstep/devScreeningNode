@@ -428,24 +428,49 @@ exports.update = (req, res) => {
                 .json({ status: false, message: err.message, token: newToken });
             }
 
-            Common.adminActivityLog(
-              ipAddress,
-              ipType,
+            Service.updateReportForm(
+              id,
               admin_id,
-              "Service",
-              "Update",
-              "1",
-              JSON.stringify({ id, ...changes }),
-              null,
-              () => { }
-            );
+              title,
+              (err, reportFormRes) => {
+                if (err) {
+                  console.error("Database error:", err);
+                  Common.adminActivityLog(
+                    ipAddress,
+                    ipType,
+                    admin_id,
+                    "Service",
+                    "Create",
+                    "0",
+                    null,
+                    err,
+                    () => { }
+                  );
+                  return res
+                    .status(500)
+                    .json({ status: false, message: err.message, token: newToken });
+                }
 
-            return res.json({
-              status: true,
-              message: "Service updated successfully",
-              service: result,
-              token: newToken,
-            });
+                Common.adminActivityLog(
+                  ipAddress,
+                  ipType,
+                  admin_id,
+                  "Service",
+                  "Update",
+                  "1",
+                  JSON.stringify({ id, ...changes }),
+                  null,
+                  () => { }
+                );
+
+                return res.json({
+                  status: true,
+                  message: "Service updated successfully",
+                  service: result,
+                  token: newToken,
+                });
+              }
+            );
           }
         );
       });

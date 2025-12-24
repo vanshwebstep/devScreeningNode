@@ -26,156 +26,309 @@ const Service = {
 
   createReportForm: async (service_id, admin_id, serviceTitle, callback) => {
     try {
-      console.log("▶️ createReportForm called with:", { service_id, admin_id, serviceTitle });
-
-      // Step 1: Check if entry already exists for this service_id
-      console.log("🔍 Step 1: Checking if report form exists for service_id:", service_id);
-      const checkSql = `
-      SELECT * FROM \`report_forms\` WHERE \`service_id\` = ?
-    `;
-      const existing = await sequelize.query(checkSql, {
-        replacements: [service_id],
-        type: QueryTypes.SELECT,
-      });
-      console.log("✅ Step 1 Result:", existing);
+      /* ---------------- STEP 1: CHECK EXISTENCE ---------------- */
+      const existing = await sequelize.query(
+        `SELECT id FROM report_forms WHERE service_id = ?`,
+        {
+          replacements: [service_id],
+          type: QueryTypes.SELECT
+        }
+      );
 
       if (existing.length > 0) {
-        console.log(`⚠️ Report form already exists for service_id: ${service_id}`);
-        return callback(null, { message: "Report form already exists", service_id });
+        return callback(null, {
+          message: "Report form already exists",
+          service_id
+        });
       }
 
-      // Step 2: Generate a unique dbTable name
-      console.log("⚙️ Step 2: Generating dbTable name from serviceTitle:", serviceTitle);
-      const generateDbTableName = (title) => {
-        return title
+      /* ---------------- STEP 2: GENERATE UNIQUE DB TABLE ---------------- */
+      const generateDbTableName = title =>
+        title
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "_")
           .replace(/^_|_$/g, "");
-      };
 
       let baseName = generateDbTableName(serviceTitle);
       let dbTable = baseName;
       let counter = 1;
 
-      console.log("👉 Generated base dbTable name:", baseName);
-
-      // Ensure uniqueness in report_forms table
       while (true) {
-        console.log(`🔎 Checking uniqueness for dbTable: ${dbTable}`);
-        const checkTableSql = `
-        SELECT COUNT(*) as count FROM \`report_forms\`
-        WHERE JSON_EXTRACT(\`json\`, '$.db_table') = ?
-      `;
-        const [{ count }] = await sequelize.query(checkTableSql, {
-          replacements: [dbTable],
-          type: QueryTypes.SELECT,
-        });
-        console.log("🔢 Found count:", count);
+        const [{ count }] = await sequelize.query(
+          `
+        SELECT COUNT(*) AS count
+        FROM report_forms
+        WHERE JSON_EXTRACT(json, '$.db_table') = ?
+        `,
+          {
+            replacements: [dbTable],
+            type: QueryTypes.SELECT
+          }
+        );
 
-        if (count === 0) {
-          console.log("✅ Unique dbTable found:", dbTable);
-          break;
-        }
+        if (count === 0) break;
         dbTable = `${baseName}_${counter++}`;
-        console.log("⚠️ dbTable exists, trying next:", dbTable);
       }
 
-      // Step 3: JSON template
-      console.log("📝 Step 3: Preparing JSON template for dbTable:", dbTable);
-      const json = `{
-      "heading": "{{serviceTitle}}",
-      "db_table": "{{dbTable}}",
-      "headers": [
-        "PARTICULARS",
-        "APPLICANT DETAILS",
-        "VERIFIED DETAILS"
-      ],
-      "rows": [
-        {
-          "label": "Name Of The Applicant:",
-          "inputs": [
-            { "name": "name_of_the_applicant{{dbTable}}", "type": "text" },
-            { "name": "verified_name_of_the_applicant{{dbTable}}", "type": "text" }
-          ]
-        },
-        {
-          "label": "Information Source:",
-          "inputs": [
-            { "name": "information_source{{dbTable}}", "type": "text" }
-          ]
-        },
-        {
-          "label": "Date Of Verification:",
-          "inputs": [
-            { "name": "date_of_verification{{dbTable}}", "type": "datepicker" }
-          ]
-        },
-        {
-          "label": "Additional Fee:",
-          "inputs": [
-            { "name": "additional_fee{{dbTable}}", "type": "text" }
-          ]
-        },
-        {
-          "label": "Remarks:",
-          "inputs": [
-            { "name": "remarks{{dbTable}}", "type": "text" }
-          ]
-        },
-        {
-          "label": "Annexure:",
-          "inputs": [
-            { "name": "annexure{{dbTable}}", "type": "file", "multiple": true, "required": true }
-          ]
-        },
-        {
-          "label": "Colour Code:",
-          "inputs": [
-            {
-              "name": "colour_code{{dbTable}}",
-              "type": "dropdown",
-              "options": [
-                { "value": "", "showText": "Select Colour" },
-                { "value": "green", "showText": "GREEN" },
-                { "value": "red", "showText": "RED" },
-                { "value": "yellow", "showText": "YELLOW" },
-                { "value": "orange", "showText": "ORANGE" },
-                { "value": "pink", "showText": "PINK" }
-              ]
-            }
-          ]
-        }
-      ]
-    }`;
+      /* ---------------- STEP 3: BUILD JSON SAFELY ---------------- */
+      const jsonTemplate = {
+        heading: serviceTitle,
+        db_table: dbTable,
+        headers: [
+          "PARTICULARS",
+          "APPLICANT DETAILS",
+          "VERIFIED DETAILS"
+        ],
+        rows: [
+          {
+            label: "Name Of The Applicant:",
+            inputs: [
+              { name: `name_of_the_applicant${dbTable}`, type: "text" },
+              { name: `verified_name_of_the_applicant${dbTable}`, type: "text" }
+            ]
+          },
+          {
+            label: "Information Source:",
+            inputs: [{ name: `information_source${dbTable}`, type: "text" }]
+          },
+          {
+            label: "Date Of Verification:",
+            inputs: [{ name: `date_of_verification${dbTable}`, type: "datepicker" }]
+          },
+          {
+            label: "Additional Fee:",
+            inputs: [{ name: `additional_fee${dbTable}`, type: "text" }]
+          },
+          {
+            label: "Remarks:",
+            inputs: [{ name: `remarks${dbTable}`, type: "text" }]
+          },
+          {
+            label: "Annexure:",
+            inputs: [
+              {
+                name: `annexure${dbTable}`,
+                type: "file",
+                multiple: true,
+                required: true
+              }
+            ]
+          },
+          {
+            label: "Colour Code:",
+            inputs: [
+              {
+                name: `colour_code${dbTable}`,
+                type: "dropdown",
+                options: [
+                  { value: "", showText: "Select Colour" },
+                  { value: "green", showText: "GREEN" },
+                  { value: "red", showText: "RED" },
+                  { value: "yellow", showText: "YELLOW" },
+                  { value: "orange", showText: "ORANGE" },
+                  { value: "pink", showText: "PINK" }
+                ]
+              }
+            ]
+          }
+        ]
+      };
 
-      // Step 4: Replace placeholders
-      console.log("🛠 Step 4: Replacing placeholders in JSON template...");
-      const updatedJson = json
-        .replaceAll("{{serviceTitle}}", serviceTitle)
-        .replaceAll("{{dbTable}}", dbTable);
-      console.log("✅ Final JSON:", updatedJson);
-
-      // Step 5: Insert new entry
-      console.log("📥 Step 5: Inserting new report form into DB...");
-      const insertSql = `
-      INSERT INTO \`report_forms\` (\`service_id\`, \`admin_id\`, \`json\`)
+      /* ---------------- STEP 4: INSERT ---------------- */
+      await sequelize.query(
+        `
+      INSERT INTO report_forms (service_id, admin_id, json)
       VALUES (?, ?, ?)
-    `;
-      const results = await sequelize.query(insertSql, {
-        replacements: [service_id, admin_id, updatedJson],
-        type: QueryTypes.INSERT,
-      });
-      console.log("✅ Insert successful. Results:", results);
+      `,
+        {
+          replacements: [
+            service_id,
+            admin_id,
+            JSON.stringify(jsonTemplate)
+          ],
+          type: QueryTypes.INSERT
+        }
+      );
 
-      console.log(`🎉 New report form created for service_id: ${service_id}, db_table: ${dbTable}`);
-      return callback(null, { message: "Report form created successfully", dbTable, results });
+      return callback(null, {
+        message: "Report form created successfully",
+        service_id,
+        dbTable
+      });
 
     } catch (err) {
-      console.error("❌ Error creating report form:", err);
-      return callback(err, null);
+      console.error("createReportForm error:", err);
+      callback(err, null);
     }
   },
 
+  updateReportForm: async (
+    service_id,
+    admin_id,
+    serviceTitle,
+    callback
+  ) => {
+    try {
+      /* ---------------- STEP 1: CHECK EXISTENCE ---------------- */
+      const checkSql = `
+      SELECT id, json
+      FROM report_forms
+      WHERE service_id = ?
+    `;
+
+      const existing = await sequelize.query(checkSql, {
+        replacements: [service_id],
+        type: QueryTypes.SELECT
+      });
+
+      /* =========================================================
+         ✅ CASE 1: REPORT FORM EXISTS → UPDATE SERVICE NAME ONLY
+         ========================================================= */
+      if (existing.length > 0) {
+        const reportForm = existing[0];
+        const parsedJson = JSON.parse(reportForm.json);
+
+        // Update heading only
+        parsedJson.heading = serviceTitle;
+
+        const updateSql = `
+        UPDATE report_forms
+        SET json = ?
+        WHERE service_id = ?
+      `;
+
+        await sequelize.query(updateSql, {
+          replacements: [JSON.stringify(parsedJson), service_id],
+          type: QueryTypes.UPDATE
+        });
+
+        return callback(null, {
+          message: "Service name updated successfully",
+          service_id,
+          dbTable: parsedJson.db_table
+        });
+      }
+
+      /* =========================================================
+         ✅ CASE 2: REPORT FORM DOES NOT EXIST → CREATE NEW
+         ========================================================= */
+
+      // Generate db table name
+      const generateDbTableName = title =>
+        title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_|_$/g, "");
+
+      let baseName = generateDbTableName(serviceTitle);
+      let dbTable = baseName;
+      let counter = 1;
+
+      while (true) {
+        const [{ count }] = await sequelize.query(
+          `
+        SELECT COUNT(*) AS count
+        FROM report_forms
+        WHERE JSON_EXTRACT(json, '$.db_table') = ?
+        `,
+          {
+            replacements: [dbTable],
+            type: QueryTypes.SELECT
+          }
+        );
+
+        if (count === 0) break;
+        dbTable = `${baseName}_${counter++}`;
+      }
+
+      /* ---------------- JSON TEMPLATE ---------------- */
+      const jsonTemplate = {
+        heading: serviceTitle,
+        db_table: dbTable,
+        headers: [
+          "PARTICULARS",
+          "APPLICANT DETAILS",
+          "VERIFIED DETAILS"
+        ],
+        rows: [
+          {
+            label: "Name Of The Applicant:",
+            inputs: [
+              { name: `name_of_the_applicant${dbTable}`, type: "text" },
+              { name: `verified_name_of_the_applicant${dbTable}`, type: "text" }
+            ]
+          },
+          {
+            label: "Information Source:",
+            inputs: [{ name: `information_source${dbTable}`, type: "text" }]
+          },
+          {
+            label: "Date Of Verification:",
+            inputs: [{ name: `date_of_verification${dbTable}`, type: "datepicker" }]
+          },
+          {
+            label: "Additional Fee:",
+            inputs: [{ name: `additional_fee${dbTable}`, type: "text" }]
+          },
+          {
+            label: "Remarks:",
+            inputs: [{ name: `remarks${dbTable}`, type: "text" }]
+          },
+          {
+            label: "Annexure:",
+            inputs: [
+              {
+                name: `annexure${dbTable}`,
+                type: "file",
+                multiple: true,
+                required: true
+              }
+            ]
+          },
+          {
+            label: "Colour Code:",
+            inputs: [
+              {
+                name: `colour_code${dbTable}`,
+                type: "dropdown",
+                options: [
+                  { value: "", showText: "Select Colour" },
+                  { value: "green", showText: "GREEN" },
+                  { value: "red", showText: "RED" },
+                  { value: "yellow", showText: "YELLOW" },
+                  { value: "orange", showText: "ORANGE" },
+                  { value: "pink", showText: "PINK" }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+
+      /* ---------------- INSERT ---------------- */
+      await sequelize.query(
+        `
+      INSERT INTO report_forms (service_id, admin_id, json)
+      VALUES (?, ?, ?)
+      `,
+        {
+          replacements: [service_id, admin_id, JSON.stringify(jsonTemplate)],
+          type: QueryTypes.INSERT
+        }
+      );
+
+      return callback(null, {
+        message: "Report form created successfully",
+        service_id,
+        dbTable
+      });
+
+    } catch (err) {
+      console.error("updateReportFormServiceName error:", err);
+      callback(err, null);
+    }
+  }
+  ,
 
   create: async (
     title,
