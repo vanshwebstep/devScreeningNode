@@ -108,10 +108,12 @@ exports.sendAutoNotification = (req, res) => {
         name: "ScreeningStar Reports",
         email: "reports@screeningstar.com"
       },
+      /*
       {
         name: "Rohit Webstep",
         email: "rohitwebstep@gmail.com"
       }
+      */
     ];
 
     const toEmails = toArr.map((admin) => ({

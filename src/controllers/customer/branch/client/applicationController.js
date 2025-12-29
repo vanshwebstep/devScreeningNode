@@ -310,7 +310,7 @@ exports.create = (req, res) => {
 
                                     const toNewCC = [
                                       { name: 'QC Team', email: 'qc@screeningstar.com' },
-                                      { name: 'Rohit Webstep', email: 'rohitwebstep@gmail.com' },
+                                      // { name: 'Rohit Webstep', email: 'rohitwebstep@gmail.com' },
                                     ];
                                     const ccArr1 = customer.emails
                                       .split(",")
@@ -1457,7 +1457,7 @@ exports.upload = async (req, res) => {
 
                                   const toNewCC = [
                                     { name: 'QC Team', email: 'qc@screeningstar.com' },
-                                    { name: 'Rohit Webstep', email: 'rohitwebstep@gmail.com' },
+                                    // { name: 'Rohit Webstep', email: 'rohitwebstep@gmail.com' },
                                   ];
 
                                   const ccArr = [
