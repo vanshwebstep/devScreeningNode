@@ -11,6 +11,7 @@ const subUserRoutes = require("./subUserRoutes");
 const reportCaseStatusRoutes = require("./reportCaseStatusRoutes");
 const candidateRoutes = require("./candidateRoutes");
 const clientSpocController = require("../../../controllers/admin/clientSpocController");
+const apiRoutes = require("./apiRoutes");
 
 // Basic routes
 
@@ -63,4 +64,7 @@ router.use("/ticket", ticketRoutes);
 router.use("/sub-user", subUserRoutes);
 router.use("/report-case-status", reportCaseStatusRoutes);
 router.use("/candidate-application", candidateRoutes);
+router.get("/access-token/generate", profileController.generateAccessToken);
+router.get("/access-token", profileController.getAccessToken);
+router.use("/api", apiRoutes);
 module.exports = router;

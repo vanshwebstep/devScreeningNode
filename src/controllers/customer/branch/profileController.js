@@ -90,6 +90,300 @@ exports.index = (req, res) => {
   );
 };
 
+exports.getAccessToken = (req, res) => {
+  const { branch_id, additional_customer_id, sub_user_id, _token } = req.query;
+
+  // Validate required fields
+  const missingFields = [];
+  if (!branch_id) missingFields.push("Branch ID");
+  if (!_token) missingFields.push("Token");
+
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      status: false,
+      message: `Missing required fields: ${missingFields.join(", ")}`,
+    });
+  }
+
+  const action = "sub_user";
+  // Step 1: Check if the branch is authorized for the action
+  BranchCommon.isBranchAuthorizedForAction(branch_id, action, (authResult) => {
+    if (!authResult.status) {
+      return res.status(403).json({
+        status: false,
+        message: authResult.message,
+      });
+    }
+
+    // Step 2: Verify the branch token
+    BranchCommon.isBranchTokenValid(
+      _token,
+      additional_customer_id,
+      sub_user_id || null,
+      branch_id,
+      (tokenErr, tokenResult) => {
+        if (tokenErr) {
+          console.error("Error checking token validity:", tokenErr);
+          return res.status(500).json({
+            status: false,
+            message: tokenErr,
+          });
+        }
+
+        if (!tokenResult.status) {
+          return res.status(401).json({
+            status: false,
+            message: tokenResult.message,
+          });
+        }
+
+        const newToken = tokenResult.newToken;
+
+        // Step 3: Fetch client applications from database
+        Branch.getAccessToken(branch_id, (dbErr, result) => {
+          if (dbErr) {
+            console.error("Database error:", dbErr);
+            return res.status(500).json({
+              status: false,
+              message: "An error occurred while generating the access token.",
+              token: newToken,
+            });
+          }
+
+          console.log(`result - `, result);
+
+          if (!result?.status) {
+            return res.status(400).json({
+              status: false,
+              message: "Failed to generate branch access token.",
+              token: newToken,
+            });
+          }
+
+          // Token successfully generated
+          return res.status(200).json({
+            status: true,
+            message: "Access token generated successfully.",
+            access_token: result.access_token,
+            token: newToken,
+          });
+        });
+      }
+    );
+  });
+};
+
+exports.generateAccessToken = (req, res) => {
+  const { branch_id, additional_customer_id, sub_user_id, _token } = req.query;
+
+  // Validate required fields
+  const missingFields = [];
+  if (!branch_id) missingFields.push("Branch ID");
+  if (!_token) missingFields.push("Token");
+
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      status: false,
+      message: `Missing required fields: ${missingFields.join(", ")}`,
+    });
+  }
+
+  console.log(`Step = 1`);
+  const action = "sub_user";
+  // Step 1: Check if the branch is authorized for the action
+  BranchCommon.isBranchAuthorizedForAction(branch_id, action, (authResult) => {
+    if (!authResult.status) {
+      return res.status(403).json({
+        status: false,
+        message: authResult.message,
+      });
+    }
+
+    console.log(`Step = 2`);
+
+    // Step 2: Verify the branch token
+    BranchCommon.isBranchTokenValid(
+      _token,
+      sub_user_id || null,
+      branch_id,
+      (tokenErr, tokenResult) => {
+        if (tokenErr) {
+          console.error("Error checking token validity:", tokenErr);
+          return res.status(500).json({
+            status: false,
+            message: tokenErr,
+          });
+        }
+
+        if (!tokenResult.status) {
+          return res.status(401).json({
+            status: false,
+            message: tokenResult.message,
+          });
+        }
+
+        const newToken = tokenResult.newToken;
+        console.log(`Step = 3`);
+
+        // Step 3: Fetch client applications from database
+        Branch.generateAccessToken(branch_id, (dbErr, result) => {
+          if (dbErr) {
+            console.error("Database error:", dbErr);
+            return res.status(500).json({
+              status: false,
+              message: "An error occurred while generating the access token.",
+              token: newToken,
+            });
+          }
+
+          console.log(`result - `, result);
+
+          if (!result?.status) {
+            return res.status(400).json({
+              status: false,
+              message: "Failed to generate branch access token.",
+              token: newToken,
+            });
+          }
+
+          // Token successfully generated
+          return res.status(200).json({
+            status: true,
+            message: "Access token generated successfully.",
+            access_token: result.access_token,
+            token: newToken,
+          });
+        });
+      }
+    );
+  });
+};
+exports.callbackRequest = (req, res) => {
+  const { branch_id, additional_customer_id, sub_user_id, _token } = req.body;
+
+  let missingFields = [];
+  if (
+    !branch_id ||
+    branch_id === "" ||
+    branch_id === undefined ||
+    branch_id === "undefined"
+  ) {
+    missingFields.push("Branch ID");
+  }
+
+  if (
+    !_token ||
+    _token === "" ||
+    _token === undefined ||
+    _token === "undefined"
+  ) {
+    missingFields.push("Token");
+  }
+
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      status: false,
+      message: `Missing required fields: ${missingFields.join(
+        ", "
+      )}. Unable to process the callback request.`,
+    });
+  }
+
+  console.log(`Step - 1`);
+  // Step 3: Verify the branch token
+  BranchCommon.isBranchTokenValid(
+    _token,
+    additional_customer_id,
+    sub_user_id || null,
+    branch_id,
+    (tokenErr, tokenResult) => {
+      if (tokenErr) {
+        console.error("Error checking token validity:", tokenErr);
+        return res.status(500).json({
+          status: false,
+          message: tokenErr.message,
+        });
+      }
+
+      if (!tokenResult.status) {
+        return res.status(401).json({
+          status: false,
+          message:
+            "Invalid branch token. Unable to process the callback request.",
+        });
+      }
+
+      console.log(`Step - 2`);
+
+      Branch.getBranchById(branch_id, (err, currentBranch) => {
+        if (err) {
+          console.error("Database error during branch retrieval:", err);
+          return res.status(500).json({
+            status: false,
+            message:
+              "An error occurred while retrieving the branch details. Please try again.",
+          });
+        }
+
+        if (!currentBranch) {
+          return res.status(404).json({
+            status: false,
+            message:
+              "The specified branch does not exist. Unable to proceed with the callback request.",
+          });
+        }
+
+        console.log(`Step - 3`);
+
+        Customer.getCustomerById(
+          parseInt(currentBranch.customer_id),
+          (err, currentCustomer) => {
+            if (err) {
+              console.error("Database error during customer retrieval:", err);
+              return res.status(500).json({
+                status: false,
+                message:
+                  "An error occurred while retrieving the customer details. Please try again.",
+              });
+            }
+
+            if (!currentCustomer) {
+              return res.status(404).json({
+                status: false,
+                message:
+                  "The associated customer was not found. Unable to process the callback request.",
+              });
+            }
+
+            console.log(`Step - 5`);
+
+            Branch.callbackRequest(
+              branch_id,
+              currentBranch.customer_id,
+              (err, result) => {
+                if (err) {
+                  console.error("Database error:", err);
+                  return res.status(500).json({
+                    status: false,
+                    message:
+                      "An error occurred while fetching the callback request. Please try again.",
+                  });
+                }
+
+                res.status(200).json({
+                  status: true,
+                  message:
+                    "Callback request request successfully sent to the admin from the branch of the customer.",
+                });
+              }
+            );
+          }
+        );
+      });
+    }
+  );
+};
+
 // Controller to list all branches
 exports.isEmailUsed = (req, res) => {
   const { email, admin_id, _token } = req.query;

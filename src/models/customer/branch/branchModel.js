@@ -1,6 +1,22 @@
 const { sequelize } = require("../../../config/db");
 const { QueryTypes } = require("sequelize");
+const crypto = require("crypto");
 
+// Generate a random API access token
+function generateBranchAccessToken() {
+  const uuidPart = crypto.randomBytes(16).toString("hex");  // 32 chars
+  const randomPart = crypto.randomBytes(16).toString("hex"); // 32 chars
+  const token = `${uuidPart}.${randomPart}`; // ~65 chars
+
+  // Hash the token for storage
+  const hashed = crypto.createHash("sha256").update(token).digest("hex");
+
+  // Return both versions
+  return {
+    rawToken: token,     // send to branch
+    hashedToken: hashed  // save in DB
+  };
+}
 const Branch = {
   isEmailUsedBefore: async (email, callback) => {
 
@@ -19,7 +35,126 @@ const Branch = {
 
 
   },
+  getAccessToken: async (branch_id, callback) => {
+    try {
+      // ✅ SQL to fetch access tokens
+      const selectSql = "SELECT `api_access_token_raw`, `api_access_token` FROM `branches` WHERE `id` = ?";
+      console.log(`Fetching token for branch_id:`, branch_id);
 
+      // ✅ Perform SELECT query
+      const rows = await sequelize.query(selectSql, {
+        replacements: [branch_id],
+        type: QueryTypes.SELECT,
+      });
+
+      console.log(`rows - `, rows);
+
+      if (rows && rows.length > 0) {
+        // Return the raw access token
+        return callback(null, {
+          status: true,
+          access_token: rows[0].api_access_token_raw,
+        });
+      } else {
+        return callback(null, {
+          status: false,
+          message: "No branch found or token not available.",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching access token:", error);
+      return callback({ message: "Database query failed", error }, null);
+    }
+  },
+
+  generateAccessToken: async (branch_id, callback) => {
+    try {
+      const { rawToken, hashedToken } = generateBranchAccessToken();
+
+      // ✅ Correct SQL syntax
+      const updateSql = "UPDATE `branches` SET `api_access_token_raw` = ?, `api_access_token` = ? WHERE `id` = ?";
+      console.log(`branch_id - `, branch_id);
+
+      // ✅ Perform update query
+      const updateRes = await sequelize.query(updateSql, {
+        replacements: [rawToken, hashedToken, branch_id],
+        type: QueryTypes.UPDATE,
+      });
+
+      if (updateRes[1]) {
+        return callback(null, {
+          status: true,
+          access_token: rawToken, // Return raw token for client
+        });
+      } else {
+        return callback(null, {
+          status: false,
+          message: "No branch found or token not updated.",
+        });
+      }
+    } catch (error) {
+      console.error("Error updating access token:", error);
+      return callback(
+        { message: "Database query failed", error },
+        null
+      );
+    }
+  },
+
+  getBranchAndCustomerByAccessToken: async (access_token, callback) => {
+    try {
+      // ✅ Hash the provided access token to match DB value
+      const hashedToken = crypto.createHash("sha256").update(access_token).digest("hex");
+
+      // ✅ Step 1: Fetch branch by access token
+      const branchSql = "SELECT * FROM `branches` WHERE `api_access_token` = ? LIMIT 1";
+
+      const branchResult = await sequelize.query(branchSql, {
+        replacements: [hashedToken],
+        type: QueryTypes.SELECT,
+      });
+
+      console.log(`branchResult- `, branchResult);
+
+      if (branchResult.length === 0) {
+        return callback(null, {
+          status: false,
+          message: "Invalid or expired access token.",
+        });
+      }
+
+      const branch = branchResult[0];
+
+      // ✅ Step 2: Fetch customer details for this branch
+      const customerSql = `
+      SELECT 
+        *
+      FROM customers
+      WHERE id = ?
+      LIMIT 1
+    `;
+
+      const customerResult = await sequelize.query(customerSql, {
+        replacements: [branch.customer_id],
+        type: QueryTypes.SELECT,
+      });
+
+      const customer = customerResult[0] || null;
+
+      // ✅ Step 3: Return { branch, customer } cleanly
+      return callback(null, {
+        status: true,
+        message: "Branch and customer data fetched successfully.",
+        data: { branch, customer },
+      });
+    } catch (error) {
+      console.error("Error fetching branch and customer:", error);
+      return callback(
+        { message: "Database query failed", error },
+        null
+      );
+    }
+  },
   index: async (branch_id, callback) => {
 
     const query = `
@@ -186,7 +321,7 @@ const Branch = {
       return callback({ message: "Database query error", error: err }, null);
     }
   },
-  
+
   listByCustomerID: async (customer_id, callback) => {
 
     const sql = `SELECT * FROM \`branches\` WHERE \`customer_id\` = ?`;

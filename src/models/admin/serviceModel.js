@@ -386,7 +386,74 @@ const Service = {
     callback(null, results);
 
   },
+  customerAllocatedServices: async (customer_id, callback) => {
+    try {
+      const sql = "SELECT * FROM `customers` WHERE `id` = ? LIMIT 1";
 
+      // Execute query using Sequelize raw query
+      const results = await sequelize.query(sql, {
+        replacements: [customer_id],
+        type: QueryTypes.SELECT,
+      });
+
+      if (results.length === 0) {
+        return callback(null, {
+          status: false,
+          message: "Customer not found.",
+        });
+      }
+
+      const customer = results[0];
+      // Parse services if stored as JSON string
+      let servicesArray = [];
+      if (customer.services) {
+        try {
+          if (typeof customer.services === "string") {
+            servicesArray = JSON.parse(customer.services);
+          } else if (Array.isArray(customer.services)) {
+            servicesArray = customer.services;
+          }
+        } catch (err) {
+          console.error("Error parsing customer.services:", err);
+        }
+      }
+
+      console.log(`Customer ${customer_id} servicesArray:`, servicesArray);
+
+      // Extract all serviceIds into a single flat array
+      const serviceIds = servicesArray.flatMap(group =>
+        group.services.map(service => service.serviceId)
+      );
+
+      console.log(`Customer ${customer_id} serviceIds:`, serviceIds);
+
+
+      // ✅ Fetch full service details from `services` table
+      let servicesDetails = [];
+      if (serviceIds.length > 0) {
+        const serviceSql = `SELECT \`id\`, \`title\` FROM services WHERE id IN (:ids)`;
+        servicesDetails = await sequelize.query(serviceSql, {
+          replacements: { ids: serviceIds },
+          type: QueryTypes.SELECT,
+        });
+      }
+
+      return callback(null, {
+        status: true,
+        message: "Customer allocated services fetched successfully.",
+        data: {
+          // customer,
+          services: servicesDetails,
+        },
+      });
+    } catch (err) {
+      console.error("Database query error:", err);
+      return callback(
+        { status: false, message: "Database query failed.", error: err },
+        null
+      );
+    }
+  },
   digitlAddressService: async (callback) => {
     const sql = `
       SELECT * FROM \`services\`
