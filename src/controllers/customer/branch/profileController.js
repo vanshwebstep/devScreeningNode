@@ -105,7 +105,9 @@ exports.getAccessToken = (req, res) => {
     });
   }
 
+  console.log("Step = 1: Checking branch authorization");
   const action = "sub_user";
+
   // Step 1: Check if the branch is authorized for the action
   BranchCommon.isBranchAuthorizedForAction(branch_id, action, (authResult) => {
     if (!authResult.status) {
@@ -115,10 +117,11 @@ exports.getAccessToken = (req, res) => {
       });
     }
 
+    console.log("Step = 2: Verifying branch token");
+
     // Step 2: Verify the branch token
     BranchCommon.isBranchTokenValid(
       _token,
-      additional_customer_id,
       sub_user_id || null,
       branch_id,
       (tokenErr, tokenResult) => {
@@ -138,32 +141,33 @@ exports.getAccessToken = (req, res) => {
         }
 
         const newToken = tokenResult.newToken;
+        console.log("Step = 3: Fetching access token from database");
 
-        // Step 3: Fetch client applications from database
+        // Step 3: Fetch access token from database
         Branch.getAccessToken(branch_id, (dbErr, result) => {
           if (dbErr) {
             console.error("Database error:", dbErr);
             return res.status(500).json({
               status: false,
-              message: "An error occurred while generating the access token.",
+              message: "An error occurred while fetching the access token.",
               token: newToken,
             });
           }
 
-          console.log(`result - `, result);
+          console.log("Database result:", result);
 
           if (!result?.status) {
             return res.status(400).json({
               status: false,
-              message: "Failed to generate branch access token.",
+              message: "Failed to fetch branch access token.",
               token: newToken,
             });
           }
 
-          // Token successfully generated
+          // Token successfully fetched
           return res.status(200).json({
             status: true,
-            message: "Access token generated successfully.",
+            message: "Access token fetched successfully.",
             access_token: result.access_token,
             token: newToken,
           });

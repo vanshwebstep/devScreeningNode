@@ -87,37 +87,37 @@ async function createMailForCandidate(
   toArr,
   ccArr
 ) {
-console.log("mailModule:", mailModule);
-console.log("action:", action);
+  console.log("mailModule:", mailModule);
+  console.log("action:", action);
   try {
-   const emailRows = await sequelize.query(
-  "SELECT * FROM emails WHERE module = ? AND action = ? AND status = 1",
-  {
-    replacements: [mailModule, action],
-    type: QueryTypes.SELECT,
-  }
-);
+    const emailRows = await sequelize.query(
+      "SELECT * FROM emails WHERE module = ? AND action = ? AND status = 1",
+      {
+        replacements: [mailModule, action],
+        type: QueryTypes.SELECT,
+      }
+    );
 
-if (!emailRows || emailRows.length === 0)
-  throw new Error("Email template not found");
+    if (!emailRows || emailRows.length === 0)
+      throw new Error("Email template not found");
 
-const email = emailRows[0];   // take first row
- // Assign the first (and only) element to email
+    const email = emailRows[0];   // take first row
+    // Assign the first (and only) element to email
 
     // Fetch SMTP credentials
-const smtpRows = await sequelize.query(
-  "SELECT * FROM smtp_credentials WHERE module = ? AND action = ? AND status = '1'",
-  {
-    replacements: [mailModule, action],
-    type: QueryTypes.SELECT,
-  }
-);
+    const smtpRows = await sequelize.query(
+      "SELECT * FROM smtp_credentials WHERE module = ? AND action = ? AND status = '1'",
+      {
+        replacements: [mailModule, action],
+        type: QueryTypes.SELECT,
+      }
+    );
 
-if (!smtpRows || smtpRows.length === 0)
-  throw new Error("SMTP credentials not found");
+    if (!smtpRows || smtpRows.length === 0)
+      throw new Error("SMTP credentials not found");
 
-const smtp = smtpRows[0];
- // Assign the first (and only) element to smtp
+    const smtp = smtpRows[0];
+    // Assign the first (and only) element to smtp
 
     // Create transporter
     const transporter = nodemailer.createTransport({
