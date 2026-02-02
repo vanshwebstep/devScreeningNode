@@ -53,7 +53,8 @@ async function davSubmitMail(
     company_name,
     attachments_url,
     toArr,
-    ccArr
+    ccArr,
+    bccArr
 ) {
     try {
         // Fetch email template
@@ -136,12 +137,16 @@ async function davSubmitMail(
         const toList = toArr
             .map((email) => `"${email.name}" <${email.email}>`)
             .join(", ");
+        const bccList = (bccArr || [])
+            .map((entry) => `"${entry.name}" <${entry.email}>`)
+            .join(", ");
 
         // Send email
         const mailOptions = {
             from: `"${smtp.title}" <${smtp.username}>`,
             to: toList,
             cc: ccList,
+            bcc: bccList,
             subject: email.title,
             html: template,
             ...(attachments.length > 0 && { attachments }), // Only include attachments if present

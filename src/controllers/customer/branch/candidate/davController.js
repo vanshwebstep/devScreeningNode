@@ -439,7 +439,9 @@ const sendNotificationEmails = (
                       const toArr = [{ name: 'Address Team', email: 'addres@screeningstar.com' }];
                       // const toArr = [{ name: branch.name, email: branch.email }];
                       const candidateArr = [{ name: currentCandidateApplication.name, email: currentCandidateApplication.email }];
-
+                      const bccArr = [
+                        { name: "Karan Khurana", email: "karankhurana2000@gmail.com" }
+                      ];
                       const emailList = JSON.parse(customer.emails);
                       const ccArr1 = emailList.map(email => ({ name: customer.name, email }));
 
@@ -469,7 +471,8 @@ const sendNotificationEmails = (
                         customer_name,
                         attachments,
                         toArr || [],
-                        toCC
+                        toCC,
+                        bccArr
                       )
                         .then(() => {
                           return res.status(201).json({
