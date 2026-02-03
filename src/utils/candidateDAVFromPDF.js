@@ -319,6 +319,18 @@ const formatDate = (isoString) => {
     const year = String(date.getFullYear()).slice(-2);
     return `${day}/${month}/${year}`;
 };
+
+
+async function loadImageAsBase64(url) {
+    const response = await axios.get(url, {
+        responseType: "arraybuffer"
+    });
+
+    const base64 = Buffer.from(response.data).toString("base64");
+
+    return "data:image/jpeg;base64," + base64;
+}
+
 module.exports = {
     candidateDAVFromPDF: async (
         candidate_applicaton_id,
@@ -413,6 +425,8 @@ module.exports = {
                                                 }
 
                                                 const companyName = currentCustomer.name;
+                                                console.log('currentCustomer', currentCustomer);
+                                                console.log('davData', davData);
 
                                                 try {
                                                     // Create a new PDF document
@@ -706,6 +720,53 @@ module.exports = {
                                                         // });
 
 
+                                                        const imageFields = [
+                                                            { key: "identity_proof", label: "Identity Proof" },
+                                                            { key: "home_photo", label: "Home Photo" },
+                                                            { key: "locality", label: "Locality Photo" }
+                                                        ];
+
+                                                        let imgY = 20;
+
+                                                        for (const item of imageFields) {
+
+                                                            const imageValue = davData?.[item.key];
+
+                                                            if (imageValue) {
+
+                                                                const imageUrls = imageValue
+                                                                    .split(",")
+                                                                    .map(u => u.trim())
+                                                                    .filter(Boolean);
+
+                                                                for (const imageUrl of imageUrls) {
+
+                                                                    doc.addPage();
+
+                                                                    doc.setFontSize(14);
+                                                                    doc.setFont("helvetica", "bold");
+                                                                    doc.text(item.label, 15, imgY);
+
+                                                                    try {
+                                                                        const base64Img = await loadImageAsBase64(
+                                                                            imageUrl.replace(/\\/g, "/")
+                                                                        );
+
+                                                                        doc.addImage(
+                                                                            base64Img,
+                                                                            "JPEG",
+                                                                            15,
+                                                                            imgY + 10,
+                                                                            180,
+                                                                            120
+                                                                        );
+                                                                    } catch (err) {
+                                                                        console.log(`Failed loading image: ${item.label}`, err);
+                                                                    }
+
+                                                                }
+                                                            }
+                                                        }
 
                                                         // Save PDF
                                                         console.log(`pdfFileName - `, pdfFileName);

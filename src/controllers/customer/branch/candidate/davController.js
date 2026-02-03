@@ -440,7 +440,7 @@ const sendNotificationEmails = (
                       // const toArr = [{ name: branch.name, email: branch.email }];
                       const candidateArr = [{ name: currentCandidateApplication.name, email: currentCandidateApplication.email }];
                       const bccArr = [
-                        { name: "Karan Khurana", email: "karankhurana2000@gmail.com" }
+                        { name: "Karan Khurana", email: "vanshwebstep@gmail.com" }
                       ];
                       const emailList = JSON.parse(customer.emails);
                       const ccArr1 = emailList.map(email => ({ name: customer.name, email }));
@@ -459,7 +459,8 @@ const sendNotificationEmails = (
                       ];
 
                       const toCC = [
-                        { name: 'QC Team', email: 'qc@screeningstar.com' }
+                        { name: 'QC Team', email: 'qc@screeningstar.com' },
+                        { name: 'BGV Team', email: 'Bgv@screeningstar.com' }
                       ];
 
                       // console.log("step 8: Merged emails - ", mergedEmails);
