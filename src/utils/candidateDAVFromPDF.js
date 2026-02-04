@@ -729,41 +729,45 @@ module.exports = {
                                                         let imgY = 20;
 
                                                         for (const item of imageFields) {
-
                                                             const imageValue = davData?.[item.key];
 
-                                                            if (imageValue) {
+                                                            if (!imageValue) continue;
 
-                                                                const imageUrls = imageValue
-                                                                    .split(",")
-                                                                    .map(u => u.trim())
-                                                                    .filter(Boolean);
+                                                            const imageUrls = imageValue
+                                                                .split(",")
+                                                                .map(u => u.trim())
+                                                                .filter(Boolean);
 
-                                                                for (const imageUrl of imageUrls) {
+                                                            for (const imageUrl of imageUrls) {
+                                                                doc.addPage();
 
-                                                                    doc.addPage();
+                                                                doc.setFontSize(14);
+                                                                doc.setFont("helvetica", "bold");
+                                                                doc.text(item.label, 15, imgY);
 
-                                                                    doc.setFontSize(14);
-                                                                    doc.setFont("helvetica", "bold");
-                                                                    doc.text(item.label, 15, imgY);
+                                                                try {
+                                                                    const images = await fetchImageToBase(
+                                                                        imageUrl.replace(/\\/g, "/")
+                                                                    );
 
-                                                                    try {
-                                                                        const base64Img = await loadImageAsBase64(
-                                                                            imageUrl.replace(/\\/g, "/")
-                                                                        );
+                                                                    if (!images || !images.length) continue;
+
+                                                                    for (const img of images) {
+                                                                        const maxWidth = 180;
+                                                                        const ratio = img.height / img.width;
+                                                                        const imgHeight = maxWidth * ratio;
 
                                                                         doc.addImage(
-                                                                            base64Img,
-                                                                            "JPEG",
+                                                                            img.base64,
+                                                                            img.type.toUpperCase(), // JPEG / PNG
                                                                             15,
                                                                             imgY + 10,
-                                                                            180,
-                                                                            120
+                                                                            maxWidth,
+                                                                            imgHeight
                                                                         );
-                                                                    } catch (err) {
-                                                                        console.log(`Failed loading image: ${item.label}`, err);
                                                                     }
-
+                                                                } catch (err) {
+                                                                    console.log(`Failed loading image: ${item.label}`, err);
                                                                 }
                                                             }
                                                         }
