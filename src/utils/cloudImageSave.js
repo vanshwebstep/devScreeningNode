@@ -315,11 +315,64 @@ const deleteFolder = async (folderPath) => {
   }
 };
 
+const saveBase64ImageAndUpload = async (
+  base64Data,
+  targetDir,
+  fileNameSlug = ''
+) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      if (!base64Data) {
+        return reject(new Error("Base64 data is required"));
+      }
+
+      // 🔍 Extract mime & data
+      const matches = base64Data.match(/^data:(.+);base64,(.+)$/);
+      if (!matches) {
+        return reject(new Error("Invalid base64 format"));
+      }
+
+      const mimeType = matches[1];
+      const extension = mimeType.split("/")[1];
+      const buffer = Buffer.from(matches[2], "base64");
+
+      // 🏷 Generate filename
+      const timestamp = Date.now();
+      const randomNumber = Math.floor(Math.random() * 10000);
+      const fileName = fileNameSlug
+        ? `${fileNameSlug}-${timestamp}_${randomNumber}.${extension}`
+        : `${timestamp}_${randomNumber}.${extension}`;
+
+      // 📁 Ensure local target dir exists
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      const localPath = path.join(targetDir, fileName);
+
+      // 💾 Save file locally
+      fs.writeFileSync(localPath, buffer);
+
+      // 🚀 Upload to FTP
+      await uploadToFtp(localPath);
+
+      // 🧹 Remove local file
+      fs.unlinkSync(localPath);
+
+      resolve(localPath);
+    } catch (err) {
+      console.error("Base64 upload failed:", err);
+      reject(err);
+    }
+  });
+};
+
 // Exporting the upload middleware and saving functions
 module.exports = {
   upload: upload.fields([
     { name: "pdf", maxCount: 5 },
     { name: "images", maxCount: 100 },
+    { name: "image", maxCount: 1 },
     { name: "zip", maxCount: 5 },
   ]),
   saveZip,
@@ -327,4 +380,5 @@ module.exports = {
   saveImages,
   savePdf,
   deleteFolder,
+  saveBase64ImageAndUpload
 };

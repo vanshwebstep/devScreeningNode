@@ -216,7 +216,7 @@ exports.create = (req, res) => {
                         // Prepare recipient and CC lists
 
                         let toArr = [{ name, email }];
-                        let ccArr = [{ name: 'QC Team', email: 'qc@screeningstar.com' }, { name: 'BGV Team', email: 'bgv@screeningstar.com' }];
+                        let ccArr = [{ name: 'QC Team', email: 'qc@screeningstar.com' }, { name: 'BGV Team', email: 'Bgv@screeningstar.com' }];
 
                         // Append parsed customer emails to existing ccArr
                         const newEmails = JSON.parse(customer.emails).map((email) => ({
@@ -340,7 +340,7 @@ exports.create = (req, res) => {
                                     customer.name,
                                     dav_href,
                                     [{ name: name, email: email.trim() }],
-                                    [{ name: "QC Team", email: "qc@screeningstar.com" }]
+                                    [{ name: "QC Team", email: "qc@screeningstar.com" },{ name: 'BGV Team', email: 'Bgv@screeningstar.com' }]
                                   )
                                     .then(() => {
                                       if (shouldSendBoth || shouldSendCreateOnly) {
@@ -800,7 +800,7 @@ function sendNotificationEmails(
 
                   const finalEmailCC = [
                     { name: 'QC Team', email: 'qc@screeningstar.com' },
-                    { name: 'BGV Team', email: 'bgv@screeningstar.com' },
+                    { name: 'BGV Team', email: 'Bgv@screeningstar.com' },
                     ...ccArr
                   ]
 
@@ -886,7 +886,7 @@ function sendNotificationEmails(
 
                                 const { branch, customer } = emailData;
 
-                                let createMailCCArr = [{ name: 'QC Team', email: 'qc@screeningstar.com' }, { name: 'BGV Team', email: 'bgv@screeningstar.com' }];
+                                let createMailCCArr = [{ name: 'QC Team', email: 'qc@screeningstar.com' }, { name: 'BGV Team', email: 'Bgv@screeningstar.com' }];
 
                                 // Append parsed customer emails to existing createMailCCArr
                                 const newEmails = JSON.parse(customer.emails).map((email) => ({
@@ -953,7 +953,8 @@ function sendNotificationEmails(
                                           );
                                           if (serviceIds.includes(digitalAddressID)) {
                                             const toCC = [
-                                              { name: 'QC Team', email: 'qc@screeningstar.com' }
+                                              { name: 'QC Team', email: 'qc@screeningstar.com' },
+                                              { name: 'BGV Team', email: 'Bgv@screeningstar.com' }
                                             ];
 
                                             davMail(

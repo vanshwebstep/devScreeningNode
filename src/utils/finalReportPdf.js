@@ -680,7 +680,7 @@ module.exports = {
                                                     }
 
                                                     const roundedImage = await getRoundedImage(profilePhoto, 100);
-                                                    doc.addImage(roundedImage, "PNG", imageX, profileY + 15, 40, 40);
+                                                    doc.addImage(profilePhoto, "PNG", imageX, profileY + 15, 40, 40);
 
                                                     // ---------------------------
                                                     // Compute center positions
@@ -1196,7 +1196,7 @@ module.exports = {
                                                         }
                                                         return label;
                                                     }
-                                                    
+
                                                     for (const service of servicesData) {
                                                         let yPosition = 10; // Reset yPosition to the top margin
 

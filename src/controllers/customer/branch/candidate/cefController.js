@@ -686,6 +686,8 @@ exports.submit = (req, res) => {
                             res
                           );
                         } else {
+
+                          // client applicatoin create
                           return res.status(200).json({
                             status: true,
                             cef_id: cefResult.insertId,

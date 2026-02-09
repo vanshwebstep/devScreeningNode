@@ -94,6 +94,8 @@ const clientApplication = {
         batch_no,
         sub_client,
         ticket_id,
+        photo,
+        attach_documents,
         gender
       } = data;
 
@@ -120,31 +122,33 @@ const clientApplication = {
 
         try {
           const sql = `
-            INSERT INTO \`client_applications\` (
-              \`application_id\`,
-              \`name\`,
-              \`generate_report_type\`,
-              \`employee_id\`,
-              \`client_spoc_name\`,
-              \`location\`,
-              \`branch_id\`,
-              \`services\`,
-              \`package\`,
-              \`customer_id\`,
-              \`is_priority\`,
-              \`case_id\`,
-              \`check_id\`,
-              \`batch_no\`,
-              \`sub_client\`,
-              \`ticket_id\`,
-              \`gender\`
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `;
+  INSERT INTO \`client_applications\` (
+    \`application_id\`,
+    \`name\`,
+    \`generate_report_type\`,
+    \`employee_id\`,
+    \`client_spoc_name\`,
+    \`location\`,
+    \`branch_id\`,
+    \`services\`,
+    \`package\`,
+    \`customer_id\`,
+    \`is_priority\`,
+    \`case_id\`,
+    \`check_id\`,
+    \`batch_no\`,
+    \`sub_client\`,
+    \`ticket_id\`,
+    \`gender\`,
+    \`photo\`,
+    \`attach_documents\`
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`;
 
           const values = [
             new_application_id || null,
             name || null,
-            generate_report_type|| null,
+            generate_report_type || null,
             employee_id || null,
             client_spoc_name || null,
             location || null,
@@ -158,7 +162,9 @@ const clientApplication = {
             batch_no || null,
             sub_client || null,
             ticket_id || null,
-            gender || null
+            gender || null,
+            photo || null,
+            attach_documents || null,
           ];
 
           console.log(`values - `, values);
@@ -688,6 +694,91 @@ const clientApplication = {
 
 
   },
+
+listAllApplications: async (branch_id, callback) => {
+
+    const sqlClient = `
+      SELECT 
+        *
+      FROM 
+        \`client_applications\`
+      WHERE is_deleted != 1
+        AND branch_id = ?
+      ORDER BY 
+        created_at DESC`;
+    const clientResults = await sequelize.query(sqlClient, {
+      replacements: [branch_id], // Positional replacements using ?
+      type: QueryTypes.SELECT,
+    });
+    const finalResults = [];
+    const cmtPromises = clientResults.map((clientApp) => {
+      return new Promise(async (resolve, reject) => {
+        // Query for CMT applications
+        const sqlCmt =
+          "SELECT * FROM cmt_applications WHERE client_application_id = ?";
+
+        const cmtResults = await sequelize.query(sqlCmt, {
+          replacements: [clientApp.id], // Positional replacements using ?
+          type: QueryTypes.SELECT,
+        });
+
+        const cmtData = cmtResults.map((cmtApp) => {
+          return Object.fromEntries(
+            Object.entries(cmtApp).map(([key, value]) => [
+              `cmt_${key}`,
+              value,
+            ])
+          );
+        });
+
+        // Handle services splitting and querying, only if servicesIds > 0
+        const servicesIds = clientApp.services
+          ? clientApp.services.split(",")
+          : [];
+
+        if (servicesIds.length > 0) {
+          const servicesQuery =
+            "SELECT title FROM services WHERE id IN (?)";
+          const servicesResults = await sequelize.query(servicesQuery, {
+            replacements: [servicesIds], // Positional replacements using ?
+            type: QueryTypes.SELECT,
+          });
+
+          const servicesTitles = servicesResults.map(
+            (service) => service.title
+          );
+          finalResults.push({
+            ...clientApp,
+            cmtApplications: cmtData.length > 0 ? cmtData : [],
+            serviceNames: servicesTitles, // Add services titles to the result
+          });
+          resolve();
+
+
+        } else {
+          // If no servicesIds are available, still push the data with empty serviceNames
+          finalResults.push({
+            ...clientApp,
+            cmtApplications: cmtData.length > 0 ? cmtData : [],
+            serviceNames: [],
+          });
+          resolve();
+        }
+
+      });
+    });
+
+    Promise.all(cmtPromises)
+      .then(() => {
+        // Sort finalResults by created_at DESC to ensure correct order
+        finalResults.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        callback(null, finalResults);
+      })
+      .catch((err) => {
+        callback(err, null);
+      });
+  },
+
 };
 
 module.exports = clientApplication;
