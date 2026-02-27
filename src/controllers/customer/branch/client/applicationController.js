@@ -414,275 +414,263 @@ exports.create = (req, res) => {
   });
 };
 
-exports.bulkCreate = (req, res) => {
-  const { ipAddress, ipType } = getClientIpAddress(req);
+exports.bulkCreate = async (req, res) => {
+  try {
+    console.log("===== BULK CREATE START =====");
+    console.log("BODY RECEIVED:", req.body);
 
-  const {
-    sub_user_id,
-    branch_id,
-    _token,
-    customer_id,
-    applications,
-    services,
-    package,
-  } = req.body;
+    const { ipAddress, ipType } = getClientIpAddress(req);
 
-  // Define required fields
-  const requiredFields = { branch_id, _token, customer_id, applications };
+    const {
+      sub_user_id,
+      branch_id,
+      _token,
+      customer_id,
+      applications,
+      services,
+      package: packageData,
+    } = req.body;
 
-  // Check for missing fields
-  const missingFields = Object.keys(requiredFields)
-    .filter((field) => !requiredFields[field] || requiredFields[field] === "")
-    .map((field) => field.replace(/_/g, " "));
-
-  if (missingFields.length > 0) {
-    return res.status(400).json({
-      status: false,
-      message: `Missing required fields: ${missingFields.join(", ")}`,
-    });
-  }
-
-  const action = "client_manager";
-
-  // Check branch authorization
-  BranchCommon.isBranchAuthorizedForAction(branch_id, action, (result) => {
-    if (!result.status) {
-      return res.status(403).json({
+    // =============================
+    // BASIC REQUIRED FIELD CHECK
+    // =============================
+    if (!branch_id || !_token || !customer_id || !applications) {
+      console.log("❌ Missing required main fields");
+      return res.status(400).json({
         status: false,
-        message: result.message,
+        message:
+          "Missing required fields: branch_id, _token, customer_id, applications",
       });
     }
 
-    // Validate branch token
-    BranchCommon.isBranchTokenValid(
-      _token,
-      sub_user_id || "",
-      branch_id,
-      (err, result) => {
-        if (err) {
-          console.error("Error checking token validity:", err);
-          return res.status(500).json({ status: false, message: err.message });
-        }
+    console.log("✔ Main required fields present");
 
-        if (!result.status) {
-          return res
-            .status(401)
-            .json({ status: false, message: result.message });
-        }
+    const action = "client_manager";
 
-        const newToken = result.newToken;
+    // =============================
+    // BRANCH AUTH CHECK
+    // =============================
+    BranchCommon.isBranchAuthorizedForAction(branch_id, action, (authResult) => {
+      if (!authResult.status) {
+        console.log("❌ Branch not authorized");
+        return res.status(403).json({
+          status: false,
+          message: authResult.message,
+        });
+      }
 
-        // Get SPoC ID
-        Customer.infoByID(customer_id, (err, customer) => {
+      console.log("✔ Branch authorized");
+
+      // =============================
+      // TOKEN VALIDATION
+      // =============================
+      BranchCommon.isBranchTokenValid(
+        _token,
+        sub_user_id || "",
+        branch_id,
+        async (err, tokenResult) => {
           if (err) {
-            console.error("Error checking SPoC:", err);
-            return res
-              .status(500)
-              .json({ status: false, message: err.message });
-          }
-
-          const emptyValues = [];
-          const updatedApplications = applications.filter((app) => {
-            // Check if all specified fields are empty
-            const allFieldsEmpty =
-              !app.applicant_full_name?.trim() &&
-              !app.employee_id?.trim() &&
-              !app.location?.trim();
-
-            // If all fields are empty, exclude this application
-            if (allFieldsEmpty) {
-              return false;
-            }
-
-            // Check if any of the required fields are missing and track missing fields
-            const missingFields = [];
-            if (!("applicant_full_name" in app))
-              missingFields.push("Applicant Full Name");
-            if (!("employee_id" in app)) missingFields.push("Employee ID");
-            if (!("location" in app)) missingFields.push("Location");
-
-            if (missingFields.length > 0) {
-              emptyValues.push(
-                `${app.applicant_full_name || "Unnamed applicant"
-                } (missing fields: ${missingFields.join(", ")})`
-              );
-              return false; // Exclude applications with missing fields
-            }
-
-            // Check if any of the fields are empty and track those applicants
-            const emptyFields = [];
-            if (!app.applicant_full_name?.trim())
-              emptyFields.push("Applicant Full Name");
-            if (!app.employee_id?.trim()) emptyFields.push("Employee ID");
-            if (!app.location?.trim()) emptyFields.push("Location");
-
-            if (emptyFields.length > 0) {
-              emptyValues.push(
-                `${app.applicant_full_name || "Unnamed applicant"
-                } (empty fields: ${emptyFields.join(", ")})`
-              );
-            }
-
-            // Include the application if it has at least one non-empty field
-            return true;
-          });
-
-          if (emptyValues.length > 0) {
-            return res.status(400).json({
+            console.log("❌ Token validation error:", err);
+            return res.status(500).json({
               status: false,
-              message: `Details are not complete for the following applicants: ${emptyValues.join(
-                ", "
-              )}`,
+              message: err.message,
             });
           }
 
-          // Check for duplicate employee IDs
-          const employeeIds = updatedApplications.map((app) => app.employee_id);
-
-          const employeeIdChecks = employeeIds.map((employee_id) => {
-            return new Promise((resolve, reject) => {
-              ClientApplication.checkUniqueEmpId(employee_id, (err, exists) => {
-                if (err) {
-                  reject(err);
-                } else if (exists) {
-                  reject(`Employee ID '${employee_id}' already exists.`);
-                } else {
-                  resolve(employee_id); // Pass the unique employee ID to the resolve
-                }
-              });
+          if (!tokenResult.status) {
+            console.log("❌ Invalid token");
+            return res.status(401).json({
+              status: false,
+              message: tokenResult.message,
             });
-          });
+          }
 
-          // Handle employee ID uniqueness checks
-          Promise.allSettled(employeeIdChecks)
-            .then((results) => {
-              // Collect the employee IDs that are already used
-              const alreadyUsedEmpIds = results
-                .filter((result) => result.status === "rejected")
-                .map((result) => result.reason);
+          const newToken = tokenResult.newToken;
+          console.log("✔ Token valid");
 
-              if (alreadyUsedEmpIds.length > 0) {
-                return res.status(400).json({
-                  status: false,
-                  message: `Employee IDs already used: ${alreadyUsedEmpIds.join(
-                    ", "
-                  )}`,
-                  token: newToken,
-                });
+          // =============================
+          // CUSTOMER FETCH
+          // =============================
+          Customer.infoByID(customer_id, async (err, customer) => {
+            if (err || !customer) {
+              console.log("❌ Customer not found");
+              return res.status(500).json({
+                status: false,
+                message: "Customer not found",
+              });
+            }
+
+            console.log("✔ Customer found:", customer.client_spoc_name);
+
+            const invalidApplicants = [];
+
+            const validApplications = applications.filter((app, index) => {
+              console.log(`Checking applicant ${index}:`, app);
+
+              // Skip completely empty row
+              if (
+                !app.applicant_full_name?.trim() &&
+                !app.employee_id?.trim() &&
+                !app.location?.trim()
+              ) {
+                console.log("⚠ Skipping empty row");
+                return false;
               }
 
-              // Proceed with creating client applications if all IDs are unique
-              const applicationPromises = updatedApplications.map((app) => {
-                return new Promise((resolve, reject) => {
-                  ClientApplication.create(
-                    {
-                      name: app.applicant_full_name,
-                      employee_id: app.employee_id,
-                      client_spoc_name: customer.client_spoc_name || '',
-                      location: app.location,
-                      branch_id,
-                      services,
-                      packages: package,
-                      customer_id,
-                    },
-                    (err, result) => {
-                      if (err) {
-                        reject({
-                          status: false,
-                          message: err.message,
-                          token: newToken,
-                        });
-                      } else {
-                        // Log the activity
-                        BranchCommon.branchActivityLog(
-                          ipAddress,
-                          ipType,
-                          branch_id,
-                          "Client Application",
-                          "Create",
-                          "1",
-                          `{id: ${result.insertId}}`,
-                          null,
-                          () => { }
-                        );
+              const missingFields = [];
 
-                        // Assign the new application ID to the corresponding app object
-                        app.new_application_id = result.new_application_id;
+              if (!app.applicant_full_name?.trim())
+                missingFields.push("Applicant Full Name");
 
-                        // Resolve the promise once the app is successfully created
-                        resolve(app);
-                      }
+              if (!app.employee_id?.trim())
+                missingFields.push("Employee ID");
+
+              if (!app.location?.trim())
+                missingFields.push("Location");
+
+              if (missingFields.length > 0) {
+                invalidApplicants.push(
+                  `${app.applicant_full_name || "Unnamed applicant"} 
+                  (missing: ${missingFields.join(", ")})`
+                );
+                return false;
+              }
+
+              return true;
+            });
+
+            if (invalidApplicants.length > 0) {
+              console.log("❌ Invalid applicants:", invalidApplicants);
+              return res.status(400).json({
+                status: false,
+                message: `Details are not complete for: ${invalidApplicants.join(
+                  ", "
+                )}`,
+                token: newToken,
+              });
+            }
+
+            console.log("✔ All applicants valid");
+
+            // =============================
+            // DUPLICATE EMPLOYEE CHECK
+            // =============================
+            try {
+              for (let app of validApplications) {
+                const exists = await new Promise((resolve, reject) => {
+                  ClientApplication.checkUniqueEmpId(
+                    app.employee_id,
+                    (err, exists) => {
+                      if (err) reject(err);
+                      else resolve(exists);
                     }
                   );
                 });
-              });
 
-              Promise.all(applicationPromises)
-                .then(() => {
-
-                  /*
-                  return res.status(201).json({
-                    status: true,
-                    message:
-                      "Client application created successfully and email sent.",
-                    token: newToken,
-                  });
-                  */
-
-                  // Send notification emails once all applications are created
-                  sendNotificationEmails(
-                    branch_id,
-                    customer_id,
-                    services,
-                    updatedApplications,
-                    newToken,
-                    res
-                  );
-                })
-                .catch((error) => {
-                  // Handle error if any application creation fails
-                  console.error(
-                    "Error during client application creation:",
-                    error
+                if (exists) {
+                  console.log(
+                    "❌ Duplicate employee ID:",
+                    app.employee_id
                   );
                   return res.status(400).json({
                     status: false,
-                    message:
-                      error.message ||
-                      "Failed to create one or more client applications.",
+                    message: `Employee ID '${app.employee_id}' already exists`,
                     token: newToken,
                   });
+                }
+              }
+
+              console.log("✔ All Employee IDs unique");
+            } catch (error) {
+              console.log("❌ Error in duplicate check:", error);
+              return res.status(500).json({
+                status: false,
+                message: error.message,
+                token: newToken,
+              });
+            }
+
+            // =============================
+            // CREATE APPLICATIONS
+            // =============================
+            try {
+              for (let app of validApplications) {
+                const result = await new Promise((resolve, reject) => {
+                 ClientApplication.create(
+{
+  name: app.applicant_full_name,
+  generate_report_type: app.generate_report_type,  // ✅ ADD THIS
+  employee_id: app.employee_id,
+  client_spoc_name: customer.client_spoc_name || '',
+  location: app.location,
+  branch_id,
+  services,
+  package: packageData,
+  customer_id,
+
+  case_id: app.case_id || null,
+  check_id: app.check_id || null,
+  batch_no: app.batch_no || null,
+  sub_client: app.sub_client || null,
+  ticket_id: app.ticket_id || null,
+  gender: app.gender || null,
+  photo: app.photo || null,
+  attach_documents: app.attach_documents || null,
+},
+                    (err, result) => {
+                      if (err) reject(err);
+                      else resolve(result);
+                    }
+                  );
                 });
 
-              /*
-            return res.status(201).json({
-              status: true,
-              message:
-                "Client application created successfully and email sent.",
-              token: newToken,
-            });
-            */
+                console.log("✔ Created application ID:", result.insertId);
 
+                BranchCommon.branchActivityLog(
+                  ipAddress,
+                  ipType,
+                  branch_id,
+                  "Client Application",
+                  "Create",
+                  "1",
+                  `{id: ${result.insertId}}`,
+                  null,
+                  () => {}
+                );
+              }
+
+              console.log("✔ All applications created");
+
+              // =============================
+              // SEND EMAIL
+              // =============================
               sendNotificationEmails(
                 branch_id,
                 customer_id,
                 services,
-                updatedApplications,
+                validApplications,
                 newToken,
                 res
               );
-            })
-            .catch((error) => {
-              return res.status(400).json({
+            } catch (error) {
+              console.log("❌ Creation error:", error);
+              return res.status(500).json({
                 status: false,
-                message: error,
+                message: error.message,
                 token: newToken,
               });
-            });
-        });
-      }
-    );
-  });
+            }
+          });
+        }
+      );
+    });
+  } catch (error) {
+    console.log("❌ Unexpected error:", error);
+    return res.status(500).json({
+      status: false,
+      message: error.message,
+    });
+  }
 };
 
 // Function to send email notifications
