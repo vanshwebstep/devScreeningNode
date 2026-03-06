@@ -41,9 +41,9 @@ const clientApplication = {
               SELECT \`application_id\`
               FROM \`client_applications\`
               WHERE \`application_id\` LIKE ?
-              ORDER BY \` id\` DESC
+              ORDER BY \`id\` DESC
               LIMIT 1
-            `;
+            `;  
     const applicationIdParam = `${client_unique_id}-%`;
 
     const applicationResults = await sequelize.query(getApplicationIdSql, {
