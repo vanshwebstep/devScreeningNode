@@ -692,8 +692,11 @@ exports.submit = (req, res) => {
                       });
                     }
 
-                    const candidateApplicationId = cefResult.insertId;
-
+                    // const candidateApplicationId = cefResult.insertId;
+                    const candidateApplicationId = Array.isArray(cefResult)
+                      ? cefResult[0]
+                      : cefResult?.insertId;
+                      
                     console.log("CEF application create start:");
                     // CLient application create yaha hoga 
 
