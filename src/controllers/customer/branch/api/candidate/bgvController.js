@@ -25,6 +25,7 @@ const {
   saveImage,
   saveImages,
   saveBase64ImageAndUpload,
+  saveImageFromUrlAndUpload
 } = require("../../../../../utils/cloudImageSave");
 
 // const upload = require("./uploadController");
@@ -632,42 +633,92 @@ exports.submit = (req, res) => {
 
                 console.log('govt_id', govt_id)
                 // ===== Govt ID Upload =====
-                if (
-                  typeof govt_id === 'string' &&
-                  govt_id.startsWith('data:image')
-                ) {
-                  const photoTargetDirectory = `uploads/customer/${customerCode}/application/${application_id}/photo`;
+                if (govt_id) {
+                  const govtDir = `uploads/customer/${customerCode}/application/${application_id}/photo`;
 
-                  const savedPath = await saveBase64ImageAndUpload(
-                    govt_id,
-                    photoTargetDirectory
-                  );
+                  try {
+                    let savedPath = null;
 
-                  savedPhotoPath = `${imageHost}/${savedPath}`;
+                    if (govt_id.startsWith("data:")) {
+                      console.log("✅ Govt ID: BASE64 detected");
+
+                      savedPath = await saveBase64ImageAndUpload(
+                        govt_id,
+                        govtDir
+                      );
+
+                    } else if (govt_id.startsWith("http")) {
+                      console.log("🌐 Govt ID: URL detected");
+
+                      savedPath = await saveImageFromUrlAndUpload(
+                        govt_id,
+                        govtDir
+                      );
+
+                    } else {
+                      console.log("❌ Govt ID: Unsupported format");
+                    }
+
+                    if (savedPath) {
+                      // 🔥 FIX: normalize path
+                      const normalizedPath = savedPath.replace(/\\/g, "/");
+
+                      savedPhotoPath = `${imageHost}/${normalizedPath}`;
+                      console.log("📁 Govt ID saved:", savedPhotoPath);
+                    }
+
+                  } catch (err) {
+                    console.error("🚨 Govt ID upload failed:", err.message);
+                  }
                 }
 
-                govt_id = savedPhotoPath;
+                // 🔥 FIX: overwrite correctly
+                personal_information.govt_id = savedPhotoPath || govt_id;
 
-                personal_information.govt_id = govt_id;
 
 
                 // ===== Resume Upload =====
-                if (
-                  typeof resume_file === 'string' &&
-                  resume_file.startsWith('data:')
-                ) {
-                  const resumeTargetDirectory = `uploads/customer/${customerCode}/application/${application_id}/resume`;
+                if (resume_file) {
+                  const resumeDir = `uploads/customer/${customerCode}/application/${application_id}/resume`;
 
-                  const savedResumePath = await saveBase64ImageAndUpload(
-                    resume_file,
-                    resumeTargetDirectory
-                  );
+                  try {
+                    let savedPath = null;
 
-                  savedResumeFilePath = `${imageHost}/${savedResumePath}`;
+                    if (resume_file.startsWith("data:")) {
+                      console.log("✅ Resume: BASE64 detected");
+
+                      savedPath = await saveBase64ImageAndUpload(
+                        resume_file,
+                        resumeDir
+                      );
+
+                    } else if (resume_file.startsWith("http")) {
+                      console.log("🌐 Resume: URL detected");
+
+                      savedPath = await saveImageFromUrlAndUpload(
+                        resume_file,
+                        resumeDir
+                      );
+
+                    } else {
+                      console.log("❌ Resume: Unsupported format");
+                    }
+
+                    if (savedPath) {
+                      // 🔥 FIX: normalize path
+                      const normalizedPath = savedPath.replace(/\\/g, "/");
+
+                      savedResumeFilePath = `${imageHost}/${normalizedPath}`;
+                      console.log("📁 Resume saved:", savedResumeFilePath);
+                    }
+
+                  } catch (err) {
+                    console.error("🚨 Resume upload failed:", err.message);
+                  }
                 }
 
-                resume_file = savedResumeFilePath;
-                personal_information.resume_file = resume_file;
+                // 🔥 FIX: overwrite correctly
+                personal_information.resume_file = savedResumeFilePath || resume_file;
 
                 console.log('step-444');
 
@@ -692,8 +743,10 @@ exports.submit = (req, res) => {
                       });
                     }
 
-                    const candidateApplicationId = cefResult.insertId;
-
+                    const candidateApplicationId = Array.isArray(cefResult)
+                      ? cefResult[0]
+                      : cefResult?.insertId;
+                    console.log('cefResult', cefResult)
                     console.log("CEF application create start:");
                     // CLient application create yaha hoga 
 
@@ -1355,7 +1408,7 @@ const sendNotificationEmails = (
                               return res.status(201).json({
                                 status: true,
                                 message:
-                                  "BGV Form & documents Submitted.",
+                                  "BGV Form & documents Submitted",
                               });
                             }
                           );
@@ -1368,7 +1421,7 @@ const sendNotificationEmails = (
                           return res.status(201).json({
                             status: true,
                             message:
-                              "BGV Form & documents Submitted.",
+                              "BGV Form & documents Submitted",
                           });
                         });
                     });

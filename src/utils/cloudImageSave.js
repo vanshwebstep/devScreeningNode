@@ -3,6 +3,7 @@ const path = require("path");
 const multer = require("multer");
 const ftp = require("basic-ftp");
 const App = require("../models/appModel");
+const axios = require("axios");
 
 // Fetch app information (database query) once
 let cloudImageFTPHost,
@@ -366,7 +367,55 @@ const saveBase64ImageAndUpload = async (
     }
   });
 };
+const saveImageFromUrlAndUpload = async (imageUrl, targetDir, fileNameSlug = "") => {
+  try {
+    console.log("⬇️ Fetching image from URL:", imageUrl);
 
+    const response = await axios.get(imageUrl, {
+      responseType: "arraybuffer",
+    });
+
+    console.log("📦 Response received. Status:", response.status);
+
+    const buffer = Buffer.from(response.data, "binary");
+
+    const mimeType = response.headers["content-type"];
+    console.log("🧾 MIME Type:", mimeType);
+
+    const extension = mimeType?.split("/")[1] || "jpg";
+
+    const timestamp = Date.now();
+    const randomNumber = Math.floor(Math.random() * 10000);
+
+    const fileName = fileNameSlug
+      ? `${fileNameSlug}-${timestamp}_${randomNumber}.${extension}`
+      : `${timestamp}_${randomNumber}.${extension}`;
+
+    if (!fs.existsSync(targetDir)) {
+      console.log("📁 Creating directory:", targetDir);
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const localPath = path.join(targetDir, fileName);
+
+    console.log("💾 Saving file locally:", localPath);
+    fs.writeFileSync(localPath, buffer);
+
+    console.log("🚀 Uploading to FTP...");
+    await uploadToFtp(localPath);
+
+    console.log("🧹 Deleting local file...");
+    fs.unlinkSync(localPath);
+
+    console.log("✅ Upload complete:", localPath);
+
+    return localPath;
+
+  } catch (err) {
+    console.error("🚨 URL image upload failed:", err.message);
+    throw err;
+  }
+};
 // Exporting the upload middleware and saving functions
 module.exports = {
   upload: upload.fields([
@@ -380,5 +429,6 @@ module.exports = {
   saveImages,
   savePdf,
   deleteFolder,
-  saveBase64ImageAndUpload
+  saveBase64ImageAndUpload,
+  saveImageFromUrlAndUpload
 };

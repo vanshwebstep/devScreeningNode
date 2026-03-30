@@ -20,6 +20,7 @@ const {
     saveImage,
     saveImages,
     saveBase64ImageAndUpload,
+    saveImageFromUrlAndUpload,
 } = require("../../../../../utils/cloudImageSave");
 
 exports.create = (req, res) => {
@@ -49,7 +50,7 @@ exports.create = (req, res) => {
     // Define required fields
 
 
-    
+
     const requiredFields = {
         access_token,
         name,
@@ -188,24 +189,94 @@ exports.create = (req, res) => {
 
                             let savedPhotoPath = null;
                             let savedAttachDocsPaths = [];
-                            if (photo && photo.length > 0) {
+                            if (photo) {
                                 const photoTargetDirectory = `uploads/customer/${customerCode}/application/${result.new_application_id}/photo`;
-                                const savedPath = await saveBase64ImageAndUpload(photo, photoTargetDirectory, employee_id);
-                                savedPhotoPath = `${imageHost}/${savedPath}`;
-                            }
 
-                            if (attach_documents && attach_documents.length > 0) {
-                                const attachDocumentsTargetDirectory = `uploads/customer/${customerCode}/application/${result.new_application_id}/document`;
-                                for (let i = 0; i < attach_documents.length; i++) {
-                                    const docBase64 = attach_documents[i];
-                                    const savedPath = await saveBase64ImageAndUpload(
-                                        docBase64,
-                                        attachDocumentsTargetDirectory
-                                    );
-                                    savedAttachDocsPaths.push(`${imageHost}/${savedPath}`);
+                                // console.log("📸 Incoming photo:", photo?.substring(0, 50)); // preview only
+
+                                try {
+                                    if (photo.startsWith("data:")) {
+                                        console.log("✅ Detected BASE64 image");
+
+                                        const savedPath = await saveBase64ImageAndUpload(
+                                            photo,
+                                            photoTargetDirectory,
+                                            employee_id
+                                        );
+
+                                        // console.log("📁 Base64 uploaded path:", savedPath);
+
+                                        savedPhotoPath = `${imageHost}/${savedPath}`;
+
+                                    } else if (photo.startsWith("http")) {
+                                        // console.log("🌐 Detected IMAGE URL:", photo);
+
+                                        const savedPath = await saveImageFromUrlAndUpload(
+                                            photo,
+                                            photoTargetDirectory,
+                                            employee_id
+                                        );
+
+                                        // console.log("📁 URL uploaded path:", savedPath);
+
+                                        savedPhotoPath = `${imageHost}/${savedPath}`;
+
+                                    } else {
+                                        console.log("❌ Unsupported format:", photo);
+                                    }
+
+                                } catch (err) {
+                                    console.error("🚨 Photo upload failed:", err.message);
                                 }
                             }
+                            // console.log("🎯 Final savedPhotoPath:", savedPhotoPath);
+                            if (attach_documents && attach_documents.length > 0) {
+                                const attachDocumentsTargetDirectory = `uploads/customer/${customerCode}/application/${result.new_application_id}/document`;
 
+                                console.log("📎 Total documents received:", attach_documents.length);
+
+                                for (let i = 0; i < attach_documents.length; i++) {
+                                    const doc = attach_documents[i];
+
+                                    console.log(`\n📄 Processing document [${i + 1}]`);
+                                    console.log("🔍 Preview:", doc?.substring(0, 50));
+
+                                    try {
+                                        let savedPath = null;
+
+                                        if (doc.startsWith("data:")) {
+                                            console.log("✅ Detected BASE64 document");
+
+                                            savedPath = await saveBase64ImageAndUpload(
+                                                doc,
+                                                attachDocumentsTargetDirectory
+                                            );
+
+                                            console.log("📁 Base64 saved:", savedPath);
+
+                                        } else if (doc.startsWith("http")) {
+                                            console.log("🌐 Detected URL document:", doc);
+
+                                            savedPath = await saveImageFromUrlAndUpload(
+                                                doc,
+                                                attachDocumentsTargetDirectory
+                                            );
+
+                                            console.log("📁 URL saved:", savedPath);
+
+                                        } else {
+                                            console.log("❌ Unsupported document format");
+                                            continue; // skip this file
+                                        }
+
+                                        savedAttachDocsPaths.push(`${imageHost}/${savedPath}`);
+
+                                    } catch (err) {
+                                        console.error(`🚨 Failed document [${i + 1}]:`, err.message);
+                                    }
+                                }
+                            }
+                            console.log("🎯 Final attach docs:", savedAttachDocsPaths);
                             ClientApplication.updateByData(
                                 {
                                     photo: savedPhotoPath,
@@ -423,8 +494,10 @@ exports.create = (req, res) => {
                                                                                     toNewCC
                                                                                 )
                                                                                     .then(() => {
+                                                                                        console.log("Result:", result);
                                                                                         return res.status(201).json({
                                                                                             status: true,
+                                                                                            client_application_id: result.results.insertId,
                                                                                             message:
                                                                                                 "Client application created successfully and email sent.",
                                                                                             token: access_token,

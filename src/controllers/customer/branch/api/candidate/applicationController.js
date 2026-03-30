@@ -266,7 +266,8 @@ exports.create = (req, res) => {
                                   status: true,
                                   message: "Online Background Verification Form generated successfully.",
                                   data: {
-                                    candidate: result
+                                    candidate_application_id: result.insertId,
+                                    message: "Use the generated application id in the BGV form creation payload.",
                                   },
                                   token: access_token,
                                   toArr: toArr || [],
