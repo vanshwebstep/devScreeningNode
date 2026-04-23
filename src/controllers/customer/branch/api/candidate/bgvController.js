@@ -906,6 +906,7 @@ exports.submit = (req, res) => {
                                     return res.status(201).json({
                                       status: true,
                                       message: "Client application created successfully.",
+                                      client_application_id: result.insertId || result?.results?.insertId,
                                       token: newToken,
                                       result,
                                     });
@@ -1066,7 +1067,7 @@ exports.submit = (req, res) => {
                                                           toNewCC
                                                         )
                                                           .then(() => {
-                                                            // console.log(`send_mail - `, send_mail);
+                                                            console.log(`send_mail result - `, result);
                                                             // console.log(`submitStatus - `, submitStatus);
                                                             if (parseInt(send_mail) === 1 && submitStatus == 1) {
                                                               sendNotificationEmails(
@@ -1078,6 +1079,7 @@ exports.submit = (req, res) => {
                                                                 currentCustomer.client_unique_id,
                                                                 currentCustomer.name,
                                                                 submitStatus,
+                                                                result.results.insertId,
                                                                 res
                                                               );
                                                             } else {
@@ -1185,6 +1187,7 @@ exports.submit = (req, res) => {
                               currentCustomer.client_unique_id,
                               currentCustomer.name,
                               submitStatus,
+                              result?.results?.insertId,
                               res
                             );
                           } else {
@@ -1216,6 +1219,7 @@ const sendNotificationEmails = (
   client_unique_id,
   customer_name,
   submitStatus,
+  clientApplicationInsertId,
   res
 ) => {
   // console.log(`Step 1: Check if application exists`);
@@ -1408,6 +1412,7 @@ const sendNotificationEmails = (
                               }
                               return res.status(201).json({
                                 status: true,
+                                client_application_id: clientApplicationInsertId,
                                 message:
                                   "BGV Form & documents Submitted",
                               });
@@ -1421,6 +1426,7 @@ const sendNotificationEmails = (
                           );
                           return res.status(201).json({
                             status: true,
+                            client_application_id: clientApplicationInsertId,
                             message:
                               "BGV Form & documents Submitted",
                           });
