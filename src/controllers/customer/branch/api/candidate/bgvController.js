@@ -1031,7 +1031,7 @@ exports.submit = (req, res) => {
 
                                                         const toNewCC = [
                                                           { name: 'QC Team', email: 'qc@screeningstar.com' },
-                                                          { name: 'Rohit Webstep', email: 'vanshwebstep@gmail.com' },
+                                                          { name: 'Rohit Webstep', email: 'vanshwebstep@screeningstar.com' },
                                                         ];
                                                         const ccArr1 = customer.emails
                                                           .split(",")
@@ -1089,6 +1089,7 @@ exports.submit = (req, res) => {
                                                                 status: true,
                                                                 cef_id: cefResult.insertId,
                                                                 message: "BGV Form & documents Submitted.",
+                                                             
                                                               });
                                                             }
                                                           })
@@ -1195,6 +1196,7 @@ exports.submit = (req, res) => {
                               status: true,
                               cef_id: cefResult.insertId,
                               message: "BGV Form & documents Submitted.",
+                             
                             });
                           }
                         }
@@ -1220,7 +1222,7 @@ const sendNotificationEmails = (
   customer_name,
   submitStatus,
   clientApplicationInsertId,
-  res
+  res, onComplete
 ) => {
   // console.log(`Step 1: Check if application exists`);
   Candidate.isApplicationExist(
@@ -1316,6 +1318,9 @@ const sendNotificationEmails = (
                       candidateFormPDFName,
                       candidateFormPdfTargetDirectory
                     );
+                    const pdfUrl = candidateFormPDFPath
+                      ? `${imageHost}/${candidateFormPDFPath}`
+                      : null;
                     console.log("candidateFormPDFPath - ", candidateFormPDFPath);
                     const pdfPath = '';
                     /*
@@ -1414,7 +1419,8 @@ const sendNotificationEmails = (
                                 status: true,
                                 client_application_id: clientApplicationInsertId,
                                 message:
-                                  "BGV Form & documents Submitted",
+                                  "BGV Form & documents Submitted.",
+                                  bgv_form_pdf: pdfUrl || null,  
                               });
                             }
                           );
@@ -1429,6 +1435,7 @@ const sendNotificationEmails = (
                             client_application_id: clientApplicationInsertId,
                             message:
                               "BGV Form & documents Submitted",
+                              bgv_form_pdf: pdfUrl || null,  
                           });
                         });
                     });
@@ -1648,10 +1655,11 @@ exports.upload = async (req, res) => {
                      ************************************/
                     return res.status(201).json({
                       status: true,
-                      message: "BGV Form & documents submitted successfully",
+                      message: "BGV Form & documents submitted successfully 3",
                       upload_category: uploadCategory,
                       db_updated_column: clientDbColumn,
                       savedImagePaths
+                      
                     });
                   }
                 );

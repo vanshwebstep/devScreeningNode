@@ -830,7 +830,6 @@ const sendNotificationEmails = (
                         message: err.message,
                       });
                     }
-
                     let imageHost = "www.example.in";
 
                     if (appInfo) {
@@ -1129,9 +1128,7 @@ exports.upload = async (req, res) => {
                       message: err.message,
                     });
                   }
-
                   let imageHost = "www.example.in";
-
                   if (appInfo) {
                     imageHost = appInfo.cloud_host || "www.example.in";
                   }
